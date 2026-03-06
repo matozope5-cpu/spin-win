@@ -754,3 +754,51 @@ canvas#wheelCanvas {
     font-size: 0.85rem;
   }
 }
+
+/* Modal phone input with prefix */
+.modal-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #01040e;
+  border: 1px solid #2a324a;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.modal-input-wrapper:focus-within {
+  border-color: #f1c40f;
+  box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.1);
+}
+
+.modal-phone-prefix {
+  background: #1a1f2e;
+  color: #f1c40f;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0 12px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #2a324a;
+  white-space: nowrap;
+}
+
+.modal-input-wrapper .modal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 12px 16px;
+  outline: none;
+  width: 100%;
+}
+
+.modal-error {
+  color: #e74c3c;
+  font-size: 0.7rem;
+  margin-top: 4px;
+  padding-left: 4px;
+}

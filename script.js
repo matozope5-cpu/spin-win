@@ -19,48 +19,41 @@ const API_ENDPOINTS = {
 };
 
 // ====================== Balance Management with localStorage ======================
-let balance = 1000; // default
+let balance = 1000;
 let isProcessing = false;
 let paymentReference = null;
 
-// Load balance from localStorage on page load
 function loadBalance() {
   const savedBalance = localStorage.getItem('multiwin_balance');
   if (savedBalance) {
     balance = parseInt(savedBalance, 10);
   } else {
-    balance = 1000; // initial welcome bonus
+    balance = 1000;
     localStorage.setItem('multiwin_balance', balance.toString());
   }
   updateBalanceUI();
 }
 
-// Save balance to localStorage
 function saveBalance() {
   localStorage.setItem('multiwin_balance', balance.toString());
 }
 
-// Update UI and save
 function updateBalanceUI() {
   balanceSpan.innerText = balance;
   const maxStake = Math.min(balance, 10000);
   stakeInput.max = maxStake;
   if (parseInt(stakeInput.value) > maxStake) stakeInput.value = maxStake;
-  saveBalance(); // persist after every change
+  saveBalance();
 }
 
 // ====================== Phone Number Utilities ======================
-// Client-side validation only - backend does the actual normalization
 function validatePhoneFormat(phone) {
-  // Remove any spaces, dashes, or special characters for validation
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
   
-  // Check if it has at least 9 digits after cleanup
   if (cleanPhone.length < 9) {
     return { valid: false, message: 'Phone number must be at least 9 digits' };
   }
   
-  // Check if it contains only digits (after removing +)
   const digitsOnly = cleanPhone.replace(/^\+/, '');
   if (!/^\d+$/.test(digitsOnly)) {
     return { valid: false, message: 'Phone number must contain only digits' };
@@ -69,17 +62,14 @@ function validatePhoneFormat(phone) {
   return { valid: true, clean: cleanPhone };
 }
 
-function formatPhoneForDisplay(phone) {
-  // For display, just return as-is
-  return phone;
-}
-
-// Normalize phone via backend
 async function normalizePhoneNumber(phone) {
   try {
     const response = await fetch(API_ENDPOINTS.normalizePhone, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ phone: phone })
     });
     
@@ -97,24 +87,28 @@ async function normalizePhoneNumber(phone) {
 }
 
 // ====================== Payment Functions ======================
-async function sendSTKPush(phoneNumber, amount, type) {
+async function sendSTKPush(phoneNumber, amount) {
+  const payload = {
+    phone_number: phoneNumber,
+    amount: amount
+  };
+
   const response = await fetch(API_ENDPOINTS.initiatePayment, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phone_number: phoneNumber,
-      amount: amount,
-      loan_amount: type === 'deposit' ? amount : 0,
-      description: type === 'deposit' ? 'MultiWin Deposit' : 'MultiWin Withdrawal'
-    })
+    headers: { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
   });
   
+  const responseData = await response.json();
+  
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Payment initiation failed');
+    throw new Error(responseData.error || responseData.message || 'Payment initiation failed');
   }
   
-  return await response.json();
+  return responseData;
 }
 
 async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000) {
@@ -125,7 +119,13 @@ async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000
       attempts++;
       
       try {
-        const response = await fetch(`${API_ENDPOINTS.verifyPayment}?reference=${encodeURIComponent(reference)}`);
+        const response = await fetch(`${API_ENDPOINTS.verifyPayment}?reference=${encodeURIComponent(reference)}`, {
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
         
         if (!response.ok) {
           if (attempts >= maxAttempts) {
@@ -135,12 +135,10 @@ async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000
           return;
         }
         
-        const data = await response.json();
-        
-        if (data.success && (data.status === 'COMPLETED' || data.status === 'SUCCESS')) {
+        if (data.success && (data.status === 'COMPLETED' || data.status === 'SUCCESS' || data.status === 'success')) {
           clearInterval(checkInterval);
           resolve(true);
-        } else if (data.success && (data.status === 'FAILED' || data.status === 'CANCELLED')) {
+        } else if (data.success && (data.status === 'FAILED' || data.status === 'CANCELLED' || data.status === 'failed')) {
           clearInterval(checkInterval);
           reject(new Error('Payment failed or was cancelled'));
         } else if (attempts >= maxAttempts) {
@@ -148,7 +146,6 @@ async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000
           reject(new Error('Payment verification timeout'));
         }
       } catch (error) {
-        console.error('Payment status check error:', error);
         if (attempts >= maxAttempts) {
           clearInterval(checkInterval);
           reject(new Error('Payment verification failed'));
@@ -158,11 +155,163 @@ async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000
   });
 }
 
-// ====================== Modal Creation with STK Push ======================
+// ====================== Process Payment with STK Push ======================
+async function processPayment(type, phone, amount) {
+  if (isProcessing) return;
+  
+  const isDeposit = type === 'deposit';
+  
+  if (!isDeposit && amount > balance) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Insufficient Balance',
+      text: `Your balance is KES ${balance.toLocaleString()}`,
+      confirmButtonColor: '#f1c40f',
+      background: '#1a1f2e',
+      color: 'white'
+    });
+    return;
+  }
+  
+  isProcessing = true;
+  
+  try {
+    Swal.fire({
+      title: 'Processing',
+      html: 'Please wait...',
+      allowOutsideClick: false,
+      background: '#1a1f2e',
+      color: 'white',
+      didOpen: () => Swal.showLoading()
+    });
+    
+    Swal.update({
+      title: 'Validating Phone',
+      html: 'Checking phone number format...'
+    });
+    
+    let normalizedPhone;
+    try {
+      normalizedPhone = await normalizePhoneNumber(phone);
+    } catch (error) {
+      normalizedPhone = phone.startsWith('0') ? '254' + phone.substring(1) : 
+                       phone.startsWith('7') ? '254' + phone : 
+                       phone.startsWith('1') ? '254' + phone : phone;
+    }
+    
+    Swal.update({
+      title: 'Sending STK Push',
+      html: 'Initiating payment request to your phone...'
+    });
+    
+    const paymentResponse = await sendSTKPush(normalizedPhone, amount);
+    
+    if (!paymentResponse || !paymentResponse.reference) {
+      throw new Error('Failed to initiate payment - no reference received');
+    }
+    
+    paymentReference = paymentResponse.reference;
+    
+    Swal.fire({
+      title: 'STK Push Sent!',
+      html: `
+        <div style="text-align: center;">
+          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
+            <i class="fas fa-mobile-alt"></i>
+          </div>
+          <p><strong>Check your phone for the M-Pesa STK push</strong></p>
+          <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">
+            ${normalizedPhone}
+          </div>
+          <p style="color: #a0aec0; margin-top: 5px;">
+            Amount: <strong>KES ${amount.toLocaleString()}</strong><br>
+            Enter your M-Pesa PIN to complete ${isDeposit ? 'deposit' : 'withdrawal'}
+          </p>
+          <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
+            <small>Verifying payment... This may take up to 60 seconds</small>
+          </div>
+        </div>
+      `,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      background: '#1a1f2e',
+      color: 'white'
+    });
+    
+    const paymentSuccess = await checkPaymentStatus(paymentReference);
+    
+    if (paymentSuccess) {
+      if (isDeposit) {
+        balance += amount;
+      } else {
+        balance -= amount;
+      }
+      updateBalanceUI();
+      
+      const names = isDeposit 
+        ? ['John', 'Mary', 'Peter', 'Ann', 'James']
+        : ['Mwangi', 'Achieng', 'Odhiambo', 'Kamau', 'Njeri'];
+      const randomName = names[Math.floor(Math.random() * names.length)];
+      const action = isDeposit ? 'deposited' : 'withdrew';
+      withdrawalTicker.textContent = `${randomName} ${action} KES ${amount.toLocaleString()} · just now`;
+      
+      await Swal.fire({
+        icon: 'success',
+        title: isDeposit ? 'Deposit Successful! 🎉' : 'Withdrawal Successful! 🎉',
+        html: `
+          <div style="text-align: center;">
+            <p><strong>KES ${amount.toLocaleString()} ${isDeposit ? 'added to' : 'withdrawn from'} your balance</strong></p>
+            <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
+              <p style="color: #a0aec0; font-size: 0.8rem;">Reference: ${paymentReference}</p>
+            </div>
+          </div>
+        `,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#f1c40f',
+        background: '#1a1f2e',
+        color: 'white',
+        timer: 3000,
+        timerProgressBar: true
+      });
+    }
+    
+  } catch (error) {
+    let errorMessage = error.message || 'Payment processing failed';
+    
+    if (errorMessage.includes('timeout')) {
+      errorMessage = 'Payment verification timed out. Please check your M-Pesa messages for confirmation.';
+    } else if (errorMessage.includes('cancelled')) {
+      errorMessage = 'You cancelled the payment on your phone.';
+    } else if (errorMessage.includes('failed')) {
+      errorMessage = 'Payment failed. Please check your M-Pesa balance and try again.';
+    }
+    
+    Swal.fire({
+      icon: 'error',
+      title: 'Payment Failed',
+      html: `
+        <div style="text-align: center;">
+          <p><strong>${errorMessage}</strong></p>
+          <p style="color: #a0aec0; margin-top: 10px; font-size: 0.85rem;">
+            If money was deducted, it will be refunded within 24 hours.
+          </p>
+        </div>
+      `,
+      confirmButtonText: 'Try Again',
+      confirmButtonColor: '#f1c40f',
+      background: '#1a1f2e',
+      color: 'white'
+    });
+  } finally {
+    isProcessing = false;
+    paymentReference = null;
+  }
+}
+
+// ====================== Modal Creation ======================
 function createModal(type) {
   if (isProcessing) return;
   
-  // Remove existing modal if any
   const existingModal = document.querySelector('.modal-overlay');
   if (existingModal) existingModal.remove();
 
@@ -191,17 +340,19 @@ function createModal(type) {
         <div class="modal-input-group">
           <div class="modal-label">Phone Number</div>
           <div class="modal-input-wrapper" style="padding-left: 0;">
-            <div class="modal-phone-prefix" style="background: #1a1f2e; height: 100%; padding: 0 12px; display: flex; align-items: center; border-radius: 16px 0 0 16px;">+254</div>
+            <div class="modal-phone-prefix">+254</div>
             <input type="tel" class="modal-input" id="modalPhone" placeholder="712345678" style="border-radius: 0 16px 16px 0;">
           </div>
           <div class="modal-error" id="phoneError"></div>
-          
+          <div style="font-size: 0.65rem; color: #7f8c8d; margin-top: 4px; padding-left: 4px;">
+            <i class="fas fa-info-circle"></i> Accepts: 07..., 7..., 01..., 1..., +254...
+          </div>
         </div>
         <div class="modal-input-group">
           <div class="modal-label">Amount (KES)</div>
           <div class="modal-input-wrapper">
             <i class="fas fa-coins"></i>
-            <input type="number" class="modal-input" id="modalAmount" placeholder="Enter amount" min="${minAmount}" step="1">
+            <input type="number" class="modal-input" id="modalAmount" placeholder="Enter amount" min="${minAmount}" max="70000" step="1">
           </div>
           <div class="modal-error" id="amountError"></div>
         </div>
@@ -222,7 +373,6 @@ function createModal(type) {
   document.body.appendChild(overlay);
   overlay.style.display = 'flex';
 
-  // Get elements
   const closeBtn = document.getElementById('modalClose');
   const cancelBtn = document.getElementById('modalCancel');
   const confirmBtn = document.getElementById('modalConfirm');
@@ -231,7 +381,6 @@ function createModal(type) {
   const phoneError = document.getElementById('phoneError');
   const amountError = document.getElementById('amountError');
 
-  // Phone validation function (client-side only)
   function validatePhone() {
     const phone = phoneInput.value.trim();
     if (!phone) {
@@ -249,7 +398,6 @@ function createModal(type) {
     return true;
   }
 
-  // Amount validation function
   function validateAmount() {
     const amount = parseInt(amountInput.value, 10);
     if (!amount || amount < minAmount) {
@@ -268,18 +416,9 @@ function createModal(type) {
     return true;
   }
 
-  // Format phone on input (basic cleaning)
-  phoneInput.addEventListener('input', function(e) {
-    let value = e.target.value;
-    // Just remove obvious spaces for display, but keep original for backend
-    e.target.value = value;
-    validatePhone();
-  });
-
-  // Amount validation on input
+  phoneInput.addEventListener('input', validatePhone);
   amountInput.addEventListener('input', validateAmount);
 
-  // Close modal functions
   function closeModal() {
     overlay.style.display = 'none';
     setTimeout(() => overlay.remove(), 300);
@@ -288,13 +427,11 @@ function createModal(type) {
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
 
-  // Click outside to close
   overlay.addEventListener('click', function(e) {
     if (e.target === overlay) closeModal();
   });
 
-  // Confirm action with STK Push
-  confirmBtn.addEventListener('click', async function() {
+  confirmBtn.addEventListener('click', function() {
     const isPhoneValid = validatePhone();
     const isAmountValid = validateAmount();
 
@@ -303,160 +440,9 @@ function createModal(type) {
     const phone = phoneInput.value.trim();
     const amount = parseInt(amountInput.value, 10);
 
-    // Close modal first
     closeModal();
-    
-    // Process payment
-    await processPayment(type, phone, amount);
+    processPayment(type, phone, amount);
   });
-}
-
-// ====================== Process Payment with STK Push ======================
-async function processPayment(type, phone, amount) {
-  if (isProcessing) return;
-  
-  const isDeposit = type === 'deposit';
-  
-  // For withdrawals, check balance first
-  if (!isDeposit && amount > balance) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Insufficient Balance',
-      text: `Your balance is KES ${balance.toLocaleString()}`,
-      confirmButtonColor: '#f1c40f',
-      background: '#1a1f2e',
-      color: 'white'
-    });
-    return;
-  }
-  
-  isProcessing = true;
-  
-  try {
-    // Show loading
-    Swal.fire({
-      title: 'Processing',
-      html: 'Please wait...',
-      allowOutsideClick: false,
-      background: '#1a1f2e',
-      color: 'white',
-      didOpen: () => Swal.showLoading()
-    });
-    
-    // Normalize phone via backend
-    Swal.update({
-      title: 'Validating Phone',
-      html: 'Checking phone number format...'
-    });
-    
-    const normalizedPhone = await normalizePhoneNumber(phone);
-    
-    // Send STK push
-    Swal.update({
-      title: 'Sending STK Push',
-      html: 'Initiating payment request...'
-    });
-    
-    const paymentResponse = await sendSTKPush(normalizedPhone, amount, type);
-    
-    if (!paymentResponse || !paymentResponse.reference) {
-      throw new Error('Failed to initiate payment');
-    }
-    
-    paymentReference = paymentResponse.reference;
-    
-    // Show STK push sent
-    Swal.fire({
-      title: 'STK Push Sent!',
-      html: `
-        <div style="text-align: center;">
-          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-            <i class="fas fa-mobile-alt"></i>
-          </div>
-          <p><strong>Check your phone for the M-Pesa STK push</strong></p>
-          <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">
-            ${normalizedPhone}
-          </div>
-          <p style="color: #a0aec0; margin-top: 5px;">
-            Enter your M-Pesa PIN to complete ${isDeposit ? 'deposit' : 'withdrawal'}
-          </p>
-          <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
-            <small>Verifying payment...</small>
-          </div>
-        </div>
-      `,
-      showConfirmButton: false,
-      allowOutsideClick: false,
-      background: '#1a1f2e',
-      color: 'white'
-    });
-    
-    // Check payment status
-    const paymentSuccess = await checkPaymentStatus(paymentReference);
-    
-    if (paymentSuccess) {
-      // Update balance based on transaction type
-      if (isDeposit) {
-        balance += amount;
-      } else {
-        balance -= amount;
-      }
-      updateBalanceUI();
-      
-      // Update ticker
-      const names = isDeposit 
-        ? ['John', 'Mary', 'Peter', 'Ann', 'James']
-        : ['Mwangi', 'Achieng', 'Odhiambo', 'Kamau', 'Njeri'];
-      const randomName = names[Math.floor(Math.random() * names.length)];
-      const action = isDeposit ? 'deposited' : 'withdrew';
-      withdrawalTicker.textContent = `${randomName} ${action} KES ${amount.toLocaleString()} · just now`;
-      
-      // Show success
-      await Swal.fire({
-        title: isDeposit ? 'Deposit Successful!' : 'Withdrawal Successful!',
-        html: `
-          <div style="text-align: center;">
-            <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-              <i class="fas fa-check-circle"></i>
-            </div>
-            <p><strong>KES ${amount.toLocaleString()} ${isDeposit ? 'added to' : 'withdrawn from'} your balance</strong></p>
-            <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
-              <p style="color: #a0aec0;">Reference: ${paymentReference}</p>
-            </div>
-          </div>
-        `,
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#f1c40f',
-        background: '#1a1f2e',
-        color: 'white',
-        timer: 3000,
-        timerProgressBar: true
-      });
-    }
-    
-  } catch (error) {
-    console.error('Payment error:', error);
-    
-    Swal.fire({
-      icon: 'error',
-      title: 'Payment Failed',
-      html: `
-        <div style="text-align: center;">
-          <p><strong>${error.message || 'Payment processing failed'}</strong></p>
-          <p style="color: #a0aec0; margin-top: 10px;">
-            Please check your phone number and M-Pesa balance, then try again
-          </p>
-        </div>
-      `,
-      confirmButtonText: 'Try Again',
-      confirmButtonColor: '#f1c40f',
-      background: '#1a1f2e',
-      color: 'white'
-    });
-  } finally {
-    isProcessing = false;
-    paymentReference = null;
-  }
 }
 
 // ====================== Wheel Segments ======================
@@ -543,7 +529,6 @@ function randomWin() {
   return { name: randomName(), mult, stake, value };
 }
 
-// Initialize winners feed
 let winnersFeed = [];
 for (let i = 0; i < 5; i++) {
   winnersFeed.push(randomWin());
@@ -558,7 +543,6 @@ function renderWinnersFeed() {
   });
 }
 
-// Update feed every 5 seconds
 setInterval(() => {
   const newWin = randomWin();
   winnersFeed.unshift(newWin);
@@ -633,7 +617,6 @@ function drawWheel(angle) {
     ctx.restore();
   }
 
-  // Inner circle
   ctx.beginPath();
   ctx.arc(centerX, centerY, 32, 0, 2 * Math.PI);
   ctx.fillStyle = '#0f1422';
@@ -642,7 +625,6 @@ function drawWheel(angle) {
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Fixed pointer
   ctx.beginPath();
   ctx.moveTo(centerX - 18, 10);
   ctx.lineTo(centerX + 18, 10);
@@ -769,7 +751,6 @@ function spin() {
         updateBalanceUI();
         resultMsg.innerHTML = `🎉 WIN! ${multiplier} = ${winAmount} Kes 🎉`;
         
-        // Add to winners feed
         const newWin = {
           name: randomName(),
           mult: multiplier,
@@ -804,16 +785,14 @@ canvas.addEventListener('touchstart', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// Deposit/Withdraw buttons
 depositBtn.addEventListener('click', () => createModal('deposit'));
 withdrawBtn.addEventListener('click', () => createModal('withdraw'));
 
 // ====================== Initialization ======================
-loadBalance(); // Load balance from localStorage
+loadBalance();
 drawWheel(wheelAngle);
 renderWinnersFeed();
 
-// Resize confetti canvas
 window.addEventListener('resize', () => {
   confettiCanvas.width = window.innerWidth;
   confettiCanvas.height = window.innerHeight;
