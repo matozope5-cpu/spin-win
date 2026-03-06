@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Spin & Win · Multiplier</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+  <div class="game-container">
+    <!-- Header with balance -->
+    <div class="header">
+      <div class="logo">
+        <i class="fas fa-dharmachakra"></i>
+        <span>MULTI<span class="accent">WIN</span></span>
+      </div>
+      <div class="balance-card">
+        <i class="fas fa-coins"></i>
+        <span class="balance-amount" id="balanceDisplay">1000</span>
+        <span class="balance-currency">Kes</span>
+      </div>
+    </div>
+
+    <!-- Info Box (similar to example) -->
+    <div class="info-box">
+      <i class="fas fa-info-circle"></i>
+      Spin the wheel to multiply your stake! Each segment shows the multiplier.
+    </div>
+
+    <!-- NEW: Recent Withdrawals Ticker -->
+    <div class="recent-loans">  <!-- reusing same class name for consistency -->
+      <i class="fas fa-bullhorn"></i>
+      <div class="recent-content">
+        <strong>Recent withdrawals</strong>
+        <span id="withdrawal-ticker">Mwangi withdrew Kes 2,500 · just now</span>
+      </div>
+    </div>
+
+    <!-- Result message -->
+    <div class="result-message" id="resultMessage">👇 tap wheel to spin</div>
+
+    <!-- Wheel with center button -->
+    <div class="wheel-container">
+      <canvas id="wheelCanvas" width="400" height="400"></canvas>
+      <button class="spin-center-btn" id="spinButton">SPIN</button>
+    </div>
+
+    <!-- Stake section -->
+    <div class="stake-section">
+      <div class="stake-label">
+        <i class="fas fa-hand-pointer"></i>
+        <span>your stake</span>
+      </div>
+      <div class="stake-input-wrapper">
+        <i class="fas fa-coins"></i>
+        <input type="number" id="stakeInput" min="1" max="10000" value="10" step="1">
+      </div>
+      <div class="stake-presets">
+        <div class="stake-chip" data-amount="10">+10</div>
+        <div class="stake-chip" data-amount="50">+50</div>
+        <div class="stake-chip" data-amount="100">+100</div>
+        <div class="stake-chip highlight" data-amount="500">+500</div>
+      </div>
+    </div>
+
+    <!-- NEW: Recent Winners Feed (non‑scrollable, always 5 items) -->
+    <div class="winners-feed">
+      <div class="feed-header">
+        <i class="fas fa-trophy"></i>
+        <span>RECENT WINNERS</span>
+      </div>
+      <ul class="feed-list no-scroll" id="winnersList">
+        <!-- 5 items will be populated by JS -->
+      </ul>
+    </div>
+
+    <!-- Trust Badges (same as before) -->
+    <div class="trust-badges">
+      <div class="badge">
+        <i class="fas fa-lock"></i>
+        Secure
+      </div>
+      <div class="badge">
+        <i class="fas fa-shield-alt"></i>
+        Encrypted
+      </div>
+      <div class="badge">
+        <i class="fas fa-bolt"></i>
+        Instant
+      </div>
+      <div class="badge">
+        <i class="fas fa-check-circle"></i>
+        Verified
+      </div>
+    </div>
+  </div>
+
+  <!-- Confetti canvas (hidden overlay) -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <script src="script.js"></script>
+</body>
+</html>
