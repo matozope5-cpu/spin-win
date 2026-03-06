@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       phone_number: phone_number,
       channel_id: PAYHERO_CONFIG.channelId,
       provider: PAYHERO_CONFIG.provider,
-      external_reference: `TYN-${timestamp}-${randomStr}`, 
+      external_reference: `SWN-${timestamp}-${randomStr}`, 
       callback_url: PAYHERO_CONFIG.callbackUrl
     };
 
