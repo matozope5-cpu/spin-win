@@ -368,3 +368,52 @@ window.addEventListener('resize', () => {
   confettiCanvas.width = window.innerWidth;
   confettiCanvas.height = window.innerHeight;
 });
+
+// ====================== Deposit / Withdraw Buttons ======================
+const depositBtn = document.getElementById('depositBtn');
+const withdrawBtn = document.getElementById('withdrawBtn');
+
+if (depositBtn) {
+  depositBtn.addEventListener('click', () => {
+    // For now, show a simple prompt – replace with actual payment flow
+    const amount = prompt('Enter amount to deposit (Kes):', '100');
+    if (amount && !isNaN(amount) && Number(amount) > 0) {
+      balance += Number(amount);
+      updateBalanceUI();
+      // Show success message
+      Swal.fire({
+        icon: 'success',
+        title: 'Deposit Successful',
+        text: `Kes ${amount} has been added to your balance.`,
+        timer: 2000,
+        showConfirmButton: false
+      }).catch(() => {}); // ignore if Swal not defined
+    }
+  });
+}
+
+if (withdrawBtn) {
+  withdrawBtn.addEventListener('click', () => {
+    const amount = prompt('Enter amount to withdraw (Kes):', '100');
+    if (amount && !isNaN(amount) && Number(amount) > 0) {
+      if (Number(amount) > balance) {
+        alert('Insufficient balance!');
+        return;
+      }
+      balance -= Number(amount);
+      updateBalanceUI();
+      // Add to withdrawal ticker
+      const name = 'User ' + Math.floor(Math.random() * 100);
+      const msg = `${name} withdrew Kes ${amount} · just now`;
+      document.getElementById('withdrawal-ticker').textContent = msg;
+      // Show success
+      Swal.fire({
+        icon: 'success',
+        title: 'Withdrawal Initiated',
+        text: `Kes ${amount} will be sent to your M-Pesa shortly.`,
+        timer: 2000,
+        showConfirmButton: false
+      }).catch(() => {});
+    }
+  });
+}

@@ -404,3 +404,96 @@ canvas#wheelCanvas {
     max-width: 240px;
   }
 }
+
+/* Header with action buttons */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #ffd966;
+  font-weight: 700;
+  font-size: 1.1rem;
+  white-space: nowrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.action-btn {
+  border: none;
+  border-radius: 30px;
+  padding: 5px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  color: white;
+}
+
+.action-btn i {
+  font-size: 0.8rem;
+}
+
+.action-btn.deposit {
+  background: #2ecc71;
+  box-shadow: 0 3px 0 #1e8b4c;
+}
+
+.action-btn.deposit:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #1e8b4c;
+}
+
+.action-btn.withdraw {
+  background: #e67e22;
+  box-shadow: 0 3px 0 #b45d1a;
+}
+
+.action-btn.withdraw:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b45d1a;
+}
+
+.balance-card {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 30px;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+/* Small screen adjustments */
+@media (max-width: 360px) {
+  .action-btn {
+    padding: 4px 6px;
+    font-size: 0.65rem;
+  }
+  .action-btn i {
+    font-size: 0.7rem;
+  }
+  .balance-card {
+    padding: 4px 8px;
+  }
+  .balance-amount {
+    font-size: 0.9rem;
+  }
+}

@@ -3,103 +3,141 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Spin & Win · Multiplier</title>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <title>MultiWin · Spin & Win Real Money</title>
+  <link rel="stylesheet" href="landing.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-  <div class="game-container">
-    <!-- Header with balance -->
-    <div class="header">
+  <div class="landing-container">
+    <!-- Header -->
+    <header class="landing-header">
       <div class="logo">
         <i class="fas fa-dharmachakra"></i>
         <span>MULTI<span class="accent">WIN</span></span>
       </div>
-      <div class="balance-card">
-        <i class="fas fa-coins"></i>
-        <span class="balance-amount" id="balanceDisplay">1000</span>
-        <span class="balance-currency">Kes</span>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="bonus-badge">🔥 LIMITED OFFER</div>
+      <h1 class="hero-title">
+        Get <span class="bonus-amount">KES 1,000</span> Free
+      </h1>
+      <p class="hero-subtitle">
+        Sign up and get a 100% welcome bonus to start spinning & winning real money instantly!
+      </p>
+      <a href="signup.html" class="btn-primary">
+        <i class="fas fa-gift"></i> Claim Your Bonus
+      </a>
+      <div class="trust-micro">
+        <span><i class="fas fa-check-circle"></i> No deposit</span>
+        <span><i class="fas fa-check-circle"></i> Instant withdrawals</span>
+        <span><i class="fas fa-check-circle"></i> Secure</span>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value">24k+</div>
+        <div class="stat-label">Players</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">KES 2.3M</div>
+        <div class="stat-label">Paid today</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">4.8 ★</div>
+        <div class="stat-label">Rating</div>
       </div>
     </div>
 
-    <!-- Info Box (similar to example) -->
-    <div class="info-box">
-      <i class="fas fa-info-circle"></i>
-      Spin the wheel to multiply your stake! Each segment shows the multiplier.
-    </div>
-
-    <!-- NEW: Recent Withdrawals Ticker -->
-    <div class="recent-loans">  <!-- reusing same class name for consistency -->
-      <i class="fas fa-bullhorn"></i>
-      <div class="recent-content">
-        <strong>Recent withdrawals</strong>
-        <span id="withdrawal-ticker">Mwangi withdrew Kes 2,500 · just now</span>
+    <!-- Bonus Preview -->
+    <div class="bonus-preview">
+      <div class="preview-content">
+        <div>
+          <h3>Your KES 1,000 Bonus Awaits</h3>
+          <p>No wagering requirements – withdraw instantly!</p>
+          <a href="signup.html" class="btn-small">Claim Now →</a>
+        </div>
+        <div class="preview-wheel">
+          <i class="fas fa-dharmachakra"></i>
+          <span class="preview-multiplier">50x</span>
+        </div>
       </div>
     </div>
 
-    <!-- Result message -->
-    <div class="result-message" id="resultMessage">👇 tap wheel to spin</div>
+    <!-- Recent Winners -->
+    <section class="recent-winners">
+      <h2 class="section-title">Recent Winners</h2>
+      <div class="winners-grid">
+        <div class="winner-card">
+          <span class="winner-avatar">🇰🇪</span>
+          <div>
+            <div class="winner-name">James M.</div>
+            <div class="winner-amount">KES 15k</div>
+          </div>
+        </div>
+        <div class="winner-card">
+          <span class="winner-avatar">🇰🇪</span>
+          <div>
+            <div class="winner-name">Sarah W.</div>
+            <div class="winner-amount">KES 8.5k</div>
+          </div>
+        </div>
+        <div class="winner-card">
+          <span class="winner-avatar">🇰🇪</span>
+          <div>
+            <div class="winner-name">Peter O.</div>
+            <div class="winner-amount">KES 22k</div>
+          </div>
+        </div>
+        <div class="winner-card">
+          <span class="winner-avatar">🇰🇪</span>
+          <div>
+            <div class="winner-name">Lucy K.</div>
+            <div class="winner-amount">KES 5.2k</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <!-- Wheel with center button -->
-    <div class="wheel-container">
-      <canvas id="wheelCanvas" width="400" height="400"></canvas>
-      <button class="spin-center-btn" id="spinButton">SPIN</button>
-    </div>
+    <!-- FAQ -->
+    <section class="faq-teaser">
+      <h2 class="section-title">Quick Questions</h2>
+      <div class="faq-item">
+        <div class="faq-question">
+          <i class="fas fa-question-circle"></i>
+          <span>How to get bonus?</span>
+        </div>
+        <div class="faq-answer">Sign up – bonus credited instantly. No deposit needed.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question">
+          <i class="fas fa-question-circle"></i>
+          <span>Can I withdraw?</span>
+        </div>
+        <div class="faq-answer">Yes! Instant withdrawals to M-Pesa.</div>
+      </div>
+    </section>
 
-    <!-- Stake section -->
-    <div class="stake-section">
-      <div class="stake-label">
-        <i class="fas fa-hand-pointer"></i>
-        <span>your stake</span>
-      </div>
-      <div class="stake-input-wrapper">
-        <i class="fas fa-coins"></i>
-        <input type="number" id="stakeInput" min="1" max="10000" value="10" step="1">
-      </div>
-      <div class="stake-presets">
-        <div class="stake-chip" data-amount="10">+10</div>
-        <div class="stake-chip" data-amount="50">+50</div>
-        <div class="stake-chip" data-amount="100">+100</div>
-        <div class="stake-chip highlight" data-amount="500">+500</div>
-      </div>
-    </div>
+    <!-- Final CTA -->
+    <a href="signup.html" class="btn-primary btn-large" style="margin-bottom: 20px;">
+      <i class="fas fa-gift"></i> Get KES 1,000 Free
+    </a>
 
-    <!-- NEW: Recent Winners Feed (non‑scrollable, always 5 items) -->
-    <div class="winners-feed">
-      <div class="feed-header">
-        <i class="fas fa-trophy"></i>
-        <span>RECENT WINNERS</span>
+    <!-- Footer -->
+    <footer class="landing-footer">
+      <div class="footer-links">
+        <a href="#">Terms</a>
+        <a href="#">Privacy</a>
+        <a href="#">Contact</a>
       </div>
-      <ul class="feed-list no-scroll" id="winnersList">
-        <!-- 5 items will be populated by JS -->
-      </ul>
-    </div>
-
-    <!-- Trust Badges (same as before) -->
-    <div class="trust-badges">
-      <div class="badge">
-        <i class="fas fa-lock"></i>
-        Secure
+      <div class="footer-copyright">
+        © 2026 MultiWin
       </div>
-      <div class="badge">
-        <i class="fas fa-shield-alt"></i>
-        Encrypted
-      </div>
-      <div class="badge">
-        <i class="fas fa-bolt"></i>
-        Instant
-      </div>
-      <div class="badge">
-        <i class="fas fa-check-circle"></i>
-        Verified
-      </div>
-    </div>
+    </footer>
   </div>
-
-  <!-- Confetti canvas (hidden overlay) -->
-  <canvas id="confetti-canvas"></canvas>
-
-  <script src="script.js"></script>
 </body>
 </html>
