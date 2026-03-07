@@ -1284,3 +1284,125 @@ canvas#wheelCanvas {
     font-size: 1.4rem;
   }
 }
+
+/* Stake section with apply button */
+.stake-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #01040e;
+  border-radius: 30px;
+  border: 1px solid #2a324a;
+  padding: 2px 2px 2px 12px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.stake-input-wrapper:focus-within {
+  border-color: #f1c40f;
+  box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.1);
+}
+
+.stake-input-wrapper i {
+  color: #f1c40f;
+  font-size: 0.9rem;
+  margin-right: 4px;
+}
+
+.stake-input-wrapper input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 8px 0;
+  outline: none;
+  width: 100%;
+}
+
+.stake-input-wrapper input::placeholder {
+  color: #4a5568;
+  font-size: 0.8rem;
+}
+
+.stake-apply-btn {
+  background: #f1c40f;
+  border: none;
+  border-radius: 30px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b0d17;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 0 #b38f00;
+  margin-left: 4px;
+}
+
+.stake-apply-btn i {
+  color: #0b0d17;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.stake-apply-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0px 0 #b38f00;
+}
+
+.stake-apply-btn:hover {
+  background: #ffd966;
+}
+
+.stake-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-left: 4px;
+  font-size: 0.65rem;
+  color: #7f8c8d;
+}
+
+.stake-hint i {
+  color: #f1c40f;
+  font-size: 0.7rem;
+}
+
+/* Small screen adjustments */
+@media (max-width: 360px) {
+  .stake-apply-btn {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .stake-apply-btn i {
+    font-size: 0.9rem;
+  }
+  
+  .stake-hint {
+    font-size: 0.6rem;
+  }
+}
+
+.winner-time {
+  color: #7f8c8d;
+  font-size: 0.6rem;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.feed-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 20px;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  border-left: 3px solid #f1c40f;
+}

@@ -58,7 +58,7 @@
       <button class="spin-center-btn" id="spinButton">SPIN</button>
     </div>
 
-    <!-- Stake section -->
+        <!-- Stake section -->
     <div class="stake-section">
       <div class="stake-label">
         <i class="fas fa-hand-pointer"></i>
@@ -66,13 +66,20 @@
       </div>
       <div class="stake-input-wrapper">
         <i class="fas fa-coins"></i>
-        <input type="number" id="stakeInput" min="1" max="10000" value="10" step="1">
+        <input type="number" id="stakeInput" min="1" max="10000" value="10" step="1" placeholder="Enter amount">
+        <button class="stake-apply-btn" id="applyStakeBtn">
+          <i class="fas fa-check"></i>
+        </button>
       </div>
       <div class="stake-presets">
         <div class="stake-chip" data-amount="10">+10</div>
         <div class="stake-chip" data-amount="50">+50</div>
         <div class="stake-chip" data-amount="100">+100</div>
         <div class="stake-chip highlight" data-amount="500">+500</div>
+      </div>
+      <div class="stake-hint" id="stakeHint">
+        <i class="fas fa-info-circle"></i>
+        <span>Click ✓ or press Enter to set stake</span>
       </div>
     </div>
 

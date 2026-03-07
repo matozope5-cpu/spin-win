@@ -761,18 +761,76 @@ function stopTicking() {
 }
 
 // ====================== Winners Feed ======================
-const namePool = ['Mwangi', 'Achieng', 'Odhiambo', 'Kamau', 'Njeri', 'Kipchoge', 'Wanjiku', 'Otieno', 'Akinyi', 'Mutua'];
+const firstNames = [
+  // Kenyan names
+  "Mwangi", "Achieng", "Odhiambo", "Kamau", "Njeri", "Kipchoge", "Wanjiku", "Otieno", "Akinyi", "Mutua",
+  "Kiprop", "Chebet", "Kiplagat", "Jepchirchir", "Kipkorir", "Jerono", "Kipkemboi", "Chepkoech", "Kiprono", "Jepkemoi",
+  "Omondi", "Adhiambo", "Okoth", "Awuor", "Ochieng", "Atieno", "Onyango", "Akoth", "Odongo", "Auma",
+  "Karanja", "Wairimu", "Njoroge", "Nyambura", "Kimani", "Wambui", "Maina", "Njoki", "Ngugi", "Muthoni",
+  "Mutiso", "Mwikali", "Kioko", "Ndunge", "Maundu", "Ndanu", "Musyoka", "Kavindu", "Munyao", "Wayua",
+  "Kipchumba", "Chepkwony", "Kosgei", "Jelagat", "Kiprotich", "Cherotich", "Kipruto", "Jepkosgei",
+  "Were", "Apiyo", "Ouma", "Anyango", "Awino", "Mwenda", "Kanyiri", "Gitonga", "Karimi", "Mugambi",
+  "Kagwiria", "Muriuki", "Nkatha", "Kipkurui", "Chepngetich", "Kipyego", "Jepkoech", "Kipsang", "Chepchumba",
+  "Wekesa", "Nekesa", "Wanjala", "Nafula", "Wanyama", "Naliaka", "Masinde", "Namalwa",
+  
+  // English names
+  "Brian", "John", "Peter", "James", "David", "Michael", "Robert", "Daniel", "Paul", "Mark",
+  "Kevin", "Thomas", "Christopher", "Joseph", "Charles", "Anthony", "Stephen", "Andrew", "Joshua", "William",
+  "George", "Eric", "Edward", "Patrick", "Richard", "Alex", "Samuel", "Kenneth", "Francis", "Simon",
+  "Mary", "Jane", "Elizabeth", "Sarah", "Margaret", "Ann", "Susan", "Dorothy", "Helen", "Ruth",
+  "Esther", "Alice", "Grace", "Joyce", "Catherine", "Florence", "Lucy", "Rose", "Caroline", "Janet",
+  "Collins", "Evans", "Harrison", "Isaac", "Jackson", "Kennedy", "Moses", "Newton", "Pius", "Raphael",
+  "Brenda", "Cynthia", "Doreen", "Eunice", "Fridah", "Gloria", "Harriet", "Ivy", "Jacqueline", "Lydia"
+];
+
+const lastNames = [
+  "Mwangi", "Odhiambo", "Kamau", "Kipchoge", "Otieno", "Mutua", "Kiprop", "Kiplagat", "Omondi", "Okoth",
+  "Ochieng", "Onyango", "Odongo", "Karanja", "Njoroge", "Kimani", "Maina", "Ngugi", "Mutiso", "Kioko",
+  "Musyoka", "Munyao", "Wekesa", "Wanjala", "Wanyama", "Masinde", "Ouma", "Apiyo", "Mwenda", "Gitonga",
+  "Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson", "Anderson", "Taylor",
+  "Thomas", "Moore", "Jackson", "Martin", "Lee", "Thompson", "White", "Harris", "Clark", "Lewis"
+];
+
 const multipliers = ['X2', 'X5', 'X10', 'X15', 'X20', 'X30', 'X50'];
+const stakes = [10, 20, 50, 100, 200, 500];
+
+// Timestamps - weighted towards "just now" and "2 mins ago"
+const timeModifiers = [
+  "just now", "just now", "just now", "just now", "just now",  // 5x weight
+  "1 min ago", "1 min ago", "1 min ago",                        // 3x weight
+  "2 mins ago", "2 mins ago", "2 mins ago", "2 mins ago",       // 4x weight
+  "3 mins ago", "3 mins ago",                                    // 2x weight
+  "4 mins ago",                                                  // 1x weight
+  "5 mins ago"                                                   // 1x weight
+];
 
 function randomName() {
-  return namePool[Math.floor(Math.random() * namePool.length)] + ' ' + (Math.floor(Math.random() * 90) + 10);
+  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const useLastName = Math.random() > 0.5; // 50% chance of last name
+  
+  if (useLastName) {
+    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+    return `${firstName} ${lastName}`;
+  }
+  
+  return firstName;
+}
+
+function randomTime() {
+  return timeModifiers[Math.floor(Math.random() * timeModifiers.length)];
 }
 
 function randomWin() {
   const mult = multipliers[Math.floor(Math.random() * multipliers.length)];
-  const stake = [10, 20, 50, 100, 200][Math.floor(Math.random() * 5)];
-  const value = parseInt(mult.replace('X', '')) * stake;
-  return { name: randomName(), mult, stake, value };
+  const stake = stakes[Math.floor(Math.random() * stakes.length)];
+  const multValue = parseInt(mult.replace('X', ''));
+  const value = multValue * stake;
+  
+  return {
+    name: randomName(),
+    value: value,
+    time: randomTime()
+  };
 }
 
 let winnersFeed = [];
@@ -784,7 +842,11 @@ function renderWinnersFeed() {
   winnersList.innerHTML = '';
   winnersFeed.forEach(win => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="winner-name">${win.name}</span> <span class="winner-win">+${win.value} Kes</span>`;
+    li.innerHTML = `
+      <span class="winner-name">${win.name}</span>
+      <span class="winner-win">+${win.value.toLocaleString()} Kes</span>
+      <span class="winner-time">${win.time}</span>
+    `;
     winnersList.appendChild(li);
   });
 }
@@ -796,17 +858,64 @@ setInterval(() => {
   renderWinnersFeed();
 }, 5000);
 
-// ====================== Withdrawal Ticker ======================
-const withdrawalMessages = [
-  "Mwangi withdrew Kes 2,500 · just now",
-  "Achieng withdrew Kes 5,000 · 2 mins ago",
-  "Odhiambo withdrew Kes 1,200 · 5 mins ago",
-  "Kamau withdrew Kes 8,000 · 1 min ago",
-  "Njeri withdrew Kes 3,400 · 3 mins ago",
-  "Kipchoge withdrew Kes 10,000 · just now",
-  "Wanjiku withdrew Kes 700 · 4 mins ago"
-];
+// ====================== Withdrawal Ticker with Full Names ======================
+function generateWithdrawalMessages() {
+  const firstNames = [
+    // Kenyan first names
+    "Mwangi", "Achieng", "Odhiambo", "Kamau", "Njeri", "Kipchoge", "Wanjiku", "Otieno", "Akinyi", "Mutua",
+    "Kiprop", "Chebet", "Kiplagat", "Jepchirchir", "Kipkorir", "Jerono", "Kipkemboi", "Chepkoech", "Kiprono",
+    "Omondi", "Adhiambo", "Okoth", "Awuor", "Ochieng", "Atieno", "Onyango", "Akoth", "Odongo", "Auma",
+    "Karanja", "Wairimu", "Njoroge", "Nyambura", "Kimani", "Wambui", "Maina", "Njoki", "Ngugi", "Muthoni",
+    "Mutiso", "Mwikali", "Kioko", "Ndunge", "Musyoka", "Kavindu", "Munyao", "Wayua",
+    
+    // English first names (male)
+    "Brian", "John", "Peter", "James", "David", "Michael", "Robert", "Daniel", "Paul", "Mark",
+    "Kevin", "Thomas", "Christopher", "Joseph", "Charles", "Anthony", "Stephen", "Andrew", "Joshua", "William",
+    "George", "Eric", "Edward", "Patrick", "Richard", "Alex", "Samuel", "Kenneth", "Francis", "Simon",
+    "Vincent", "Nicholas", "Dennis", "Felix", "Geoffrey", "Henry", "Ian", "Jacob", "Julius", "Lawrence",
+    
+    // English first names (female)
+    "Mary", "Jane", "Elizabeth", "Sarah", "Margaret", "Ann", "Susan", "Dorothy", "Helen", "Ruth",
+    "Esther", "Alice", "Grace", "Joyce", "Catherine", "Florence", "Lucy", "Rose", "Caroline", "Janet",
+    "Agnes", "Beatrice", "Christine", "Diana", "Emily", "Faith", "Gladys", "Hannah", "Irene", "Judith",
+    "Karen", "Lillian", "Mercy", "Nancy", "Olivia", "Patricia", "Rachel", "Sophia", "Teresa", "Veronica"
+  ];
+
+  const messages = [];
+  
+  for (let i = 0; i < 200; i++) {
+    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+    // 70% chance to include last name initial, 30% chance first name only
+    const lastName = Math.random() > 0.3 ? 
+      ` ${lastNames[Math.floor(Math.random() * lastNames.length)].charAt(0)}.` : '';
+    
+    const fullName = firstName + lastName;
+    const amount = Math.floor(Math.random() * (70000 - 500 + 1) + 500);
+    const roundedAmount = Math.round(amount / 100) * 100;
+    
+    const timeModifiers = [
+      "just now", "1 min ago", "2 mins ago", "3 mins ago", "4 mins ago", 
+      "5 mins ago", "6 mins ago", "7 mins ago", "8 mins ago", "9 mins ago",
+      "10 mins ago", "12 mins ago", "15 mins ago", "20 mins ago", "25 mins ago",
+      "30 mins ago", "just now", "just now", "2 mins ago"
+    ];
+    const time = timeModifiers[Math.floor(Math.random() * timeModifiers.length)];
+    
+    messages.push(`${fullName} withdrew Kes ${roundedAmount.toLocaleString()} · ${time}`);
+  }
+  
+  return messages.sort(() => Math.random() - 0.5);
+}
+
+const withdrawalMessages = generateWithdrawalMessages();
 let withdrawalIndex = 0;
+
+setInterval(() => {
+  withdrawalIndex = (withdrawalIndex + 1) % withdrawalMessages.length;
+  withdrawalTicker.textContent = withdrawalMessages[withdrawalIndex];
+}, 4000);
+
+console.log(`✅ Loaded ${withdrawalMessages.length} withdrawal messages`);
 
 setInterval(() => {
   withdrawalIndex = (withdrawalIndex + 1) % withdrawalMessages.length;
@@ -1042,4 +1151,98 @@ renderWinnersFeed();
 window.addEventListener('resize', () => {
   confettiCanvas.width = window.innerWidth;
   confettiCanvas.height = window.innerHeight;
+});
+
+// ====================== Stake Apply Button Functionality ======================
+const applyStakeBtn = document.getElementById('applyStakeBtn');
+
+function validateAndApplyStake() {
+  let stake = parseInt(stakeInput.value, 10);
+  
+  // Validate stake
+  if (isNaN(stake) || stake < 1) {
+    stake = 1;
+    stakeInput.value = 1;
+    showStakeHint('Minimum stake is KES 1', 'error');
+  } else if (stake > balance) {
+    stake = balance;
+    stakeInput.value = balance;
+    showStakeHint(`Stake adjusted to available balance: KES ${balance}`, 'warning');
+  } else if (stake > 10000) {
+    stake = 10000;
+    stakeInput.value = 10000;
+    showStakeHint('Maximum stake is KES 10,000', 'warning');
+  } else {
+    showStakeHint(`Stake set to KES ${stake}`, 'success');
+  }
+  
+  // Update max attribute
+  stakeInput.max = Math.min(balance, 10000);
+}
+
+function showStakeHint(message, type) {
+  const stakeHint = document.getElementById('stakeHint');
+  const icon = stakeHint.querySelector('i');
+  const span = stakeHint.querySelector('span');
+  
+  span.textContent = message;
+  
+  // Change icon color based on type
+  icon.className = 'fas';
+  if (type === 'error') {
+    icon.className += ' fa-exclamation-circle';
+    icon.style.color = '#e74c3c';
+  } else if (type === 'warning') {
+    icon.className += ' fa-exclamation-triangle';
+    icon.style.color = '#f39c12';
+  } else {
+    icon.className += ' fa-check-circle';
+    icon.style.color = '#f1c40f';
+  }
+  
+  // Reset after 3 seconds
+  setTimeout(() => {
+    icon.className = 'fas fa-info-circle';
+    icon.style.color = '#f1c40f';
+    span.textContent = 'Click ✓ or press Enter to set stake';
+  }, 3000);
+}
+
+// Apply button click handler
+applyStakeBtn.addEventListener('click', validateAndApplyStake);
+
+// Enter key handler
+stakeInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    validateAndApplyStake();
+  }
+});
+
+// Also validate on blur (when input loses focus)
+stakeInput.addEventListener('blur', () => {
+  let stake = parseInt(stakeInput.value, 10);
+  
+  if (isNaN(stake) || stake < 1) {
+    stakeInput.value = 1;
+  } else if (stake > balance) {
+    stakeInput.value = balance;
+  } else if (stake > 10000) {
+    stakeInput.value = 10000;
+  }
+});
+
+// Update the existing stake chip click handlers to show feedback
+stakeChips.forEach(chip => {
+  chip.addEventListener('click', () => {
+    let amount = parseInt(chip.dataset.amount, 10);
+    const currentVal = parseInt(stakeInput.value, 10) || 0;
+    let newVal = currentVal + amount;
+    if (newVal > balance) newVal = balance;
+    if (newVal < 1) newVal = 1;
+    stakeInput.value = newVal;
+    
+    // Show feedback
+    showStakeHint(`+${amount} added. Stake: KES ${newVal}`, 'success');
+  });
 });
