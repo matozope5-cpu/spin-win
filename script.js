@@ -22,30 +22,20 @@ const API_ENDPOINTS = {
 let balance = 1000;
 let isProcessing = false;
 let paymentReference = null;
-let hasMadeDeposit = false;
 
 function loadBalance() {
   const savedBalance = localStorage.getItem('multiwin_balance');
-  const savedDepositFlag = localStorage.getItem('multiwin_has_deposited');
-  
   if (savedBalance) {
     balance = parseInt(savedBalance, 10);
   } else {
     balance = 1000;
     localStorage.setItem('multiwin_balance', balance.toString());
   }
-  
-  hasMadeDeposit = savedDepositFlag === 'true';
   updateBalanceUI();
 }
 
 function saveBalance() {
   localStorage.setItem('multiwin_balance', balance.toString());
-}
-
-function setDepositFlag() {
-  hasMadeDeposit = true;
-  localStorage.setItem('multiwin_has_deposited', 'true');
 }
 
 function updateBalanceUI() {
@@ -59,16 +49,13 @@ function updateBalanceUI() {
 // ====================== Phone Number Utilities ======================
 function validatePhoneFormat(phone) {
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-  
   if (cleanPhone.length < 9) {
     return { valid: false, message: 'Phone number must be at least 9 digits' };
   }
-  
   const digitsOnly = cleanPhone.replace(/^\+/, '');
   if (!/^\d+$/.test(digitsOnly)) {
     return { valid: false, message: 'Phone number must contain only digits' };
   }
-  
   return { valid: true, clean: cleanPhone };
 }
 
@@ -76,19 +63,11 @@ async function normalizePhoneNumber(phone) {
   try {
     const response = await fetch(API_ENDPOINTS.normalizePhone, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ phone: phone })
     });
-    
     const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Phone normalization failed');
-    }
-    
+    if (!response.ok) throw new Error(data.error || 'Phone normalization failed');
     return data.normalized_phone;
   } catch (error) {
     console.error('Phone normalization error:', error);
@@ -98,226 +77,103 @@ async function normalizePhoneNumber(phone) {
 
 // ====================== Payment Functions ======================
 async function sendSTKPush(phoneNumber, amount) {
-  const payload = {
-    phone_number: phoneNumber,
-    amount: amount
-  };
-
+  const payload = { phone_number: phoneNumber, amount: amount };
   const response = await fetch(API_ENDPOINTS.initiatePayment, {
     method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify(payload)
   });
-  
   const responseData = await response.json();
-  
   if (!response.ok) {
     throw new Error(responseData.error || responseData.message || 'Payment initiation failed');
   }
-  
   return responseData;
 }
 
 async function checkPaymentStatus(reference, maxAttempts = 20, intervalMs = 3000) {
   let attempts = 0;
-  
   return new Promise((resolve, reject) => {
     const checkInterval = setInterval(async () => {
       attempts++;
-      
       try {
         const response = await fetch(`${API_ENDPOINTS.verifyPayment}?reference=${encodeURIComponent(reference)}`, {
-          headers: {
-            'Accept': 'application/json'
-          }
+          headers: { 'Accept': 'application/json' }
         });
-        
         const data = await response.json();
-        
         if (!response.ok) {
-          if (attempts >= maxAttempts) {
-            clearInterval(checkInterval);
-            reject(new Error('Payment verification failed'));
-          }
+          if (attempts >= maxAttempts) { clearInterval(checkInterval); reject(new Error('Payment verification failed')); }
           return;
         }
-        
         if (data.success && (data.status === 'COMPLETED' || data.status === 'SUCCESS' || data.status === 'success')) {
-          clearInterval(checkInterval);
-          resolve(true);
+          clearInterval(checkInterval); resolve(true);
         } else if (data.success && (data.status === 'FAILED' || data.status === 'CANCELLED' || data.status === 'failed')) {
-          clearInterval(checkInterval);
-          reject(new Error('Payment failed or was cancelled'));
+          clearInterval(checkInterval); reject(new Error('Payment failed or was cancelled'));
         } else if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          reject(new Error('Payment verification timeout'));
+          clearInterval(checkInterval); reject(new Error('Payment verification timeout'));
         }
       } catch (error) {
-        if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          reject(new Error('Payment verification failed'));
-        }
+        if (attempts >= maxAttempts) { clearInterval(checkInterval); reject(new Error('Payment verification failed')); }
       }
     }, intervalMs);
   });
 }
 
-// ====================== Activation Modal ======================
-function showActivationModal(phone, withdrawalAmount) {
-  const activationAmount = Math.max(100, Math.round(balance * 0.1));
-  
-  Swal.fire({
-    title: 'Account Activation Required',
-    html: `
-      <div style="text-align: center;">
-        <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-          <i class="fas fa-exclamation-triangle"></i>
-        </div>
-        <p><strong>Your account needs to be activated for withdrawals</strong></p>
-        
-        <div class="activation-amount-box">
-          <div class="activation-amount-label">Activation deposit required:</div>
-          <div class="activation-amount-value">KES ${activationAmount.toLocaleString()}</div>
-        </div>
-        
-        <p style="color: #a0aec0; font-size: 0.85rem; margin-bottom: 5px;">Phone: <span style="color: #f1c40f;">${phone}</span></p>
-        <p style="color: #a0aec0; font-size: 0.8rem;">An STK push will be sent to activate your account</p>
-      </div>
-    `,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Activate Now',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#f1c40f',
-    cancelButtonColor: '#6c757d',
-    background: '#1a1f2e',
-    color: 'white',
-    allowOutsideClick: false
-  }).then((result) => {
-    if (result.isConfirmed) {
-      processActivationDeposit(phone, activationAmount, withdrawalAmount);
-    }
-  });
-}
-
-async function processActivationDeposit(phone, activationAmount, originalWithdrawalAmount) {
+// ====================== Withdrawal Fee ======================
+async function processWithdrawalFeePayment(phone, feeAmount, withdrawalAmount) {
   try {
     Swal.fire({
-      title: 'Processing Activation',
+      title: 'Processing Fee Payment',
       html: 'Please wait...',
       allowOutsideClick: false,
       background: '#1a1f2e',
       color: 'white',
       didOpen: () => Swal.showLoading()
     });
-    
-    Swal.update({
-      title: 'Validating Phone',
-      html: 'Checking phone number format...'
-    });
-    
+
     let normalizedPhone;
     try {
       normalizedPhone = await normalizePhoneNumber(phone);
     } catch (error) {
-      normalizedPhone = phone.startsWith('0') ? '254' + phone.substring(1) : 
-                       phone.startsWith('7') ? '254' + phone : 
+      normalizedPhone = phone.startsWith('0') ? '254' + phone.substring(1) :
+                       phone.startsWith('7') ? '254' + phone :
                        phone.startsWith('1') ? '254' + phone : phone;
     }
-    
-    Swal.update({
-      title: 'Sending STK Push',
-      html: 'Initiating activation payment request...'
-    });
-    
-    const paymentResponse = await sendSTKPush(normalizedPhone, activationAmount);
-    
+
+    Swal.update({ title: 'Sending STK Push', html: 'Initiating fee payment request...' });
+
+    const paymentResponse = await sendSTKPush(normalizedPhone, feeAmount);
     if (!paymentResponse || !paymentResponse.reference) {
       throw new Error('Failed to initiate payment - no reference received');
     }
-    
     paymentReference = paymentResponse.reference;
-    
+
     Swal.fire({
       title: 'STK Push Sent!',
       html: `
         <div style="text-align: center;">
-          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-            <i class="fas fa-mobile-alt"></i>
-          </div>
+          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;"><i class="fas fa-mobile-alt"></i></div>
           <p><strong>Check your phone for the M-Pesa STK push</strong></p>
-          <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">
-            ${normalizedPhone}
-          </div>
-          <p style="color: #a0aec0; margin-top: 5px;">
-            Activation Amount: <strong>KES ${activationAmount.toLocaleString()}</strong><br>
-            Enter your M-Pesa PIN to activate your account
-          </p>
-          <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
-            <small>Verifying payment... This may take up to 60 seconds</small>
-          </div>
-        </div>
-      `,
+          <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">${normalizedPhone}</div>
+          <p style="color: #a0aec0; margin-top: 5px;">Withdrawal Fee: <strong>KES ${feeAmount.toLocaleString()}</strong><br>Enter your M-Pesa PIN to complete</p>
+          <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;"><small>Verifying payment... This may take up to 60 seconds</small></div>
+        </div>`,
       showConfirmButton: false,
       allowOutsideClick: false,
       background: '#1a1f2e',
       color: 'white'
     });
-    
+
     const paymentSuccess = await checkPaymentStatus(paymentReference);
-    
-    if (paymentSuccess) {
-      balance += activationAmount;
-      updateBalanceUI();
-      setDepositFlag();
-      
-      const names = ['John', 'Mary', 'Peter', 'Ann', 'James'];
-      const randomName = names[Math.floor(Math.random() * names.length)];
-      withdrawalTicker.textContent = `${randomName} deposited KES ${activationAmount.toLocaleString()} (activation) · just now`;
-      
-      await Swal.fire({
-        icon: 'success',
-        title: 'Account Activated! 🎉',
-        html: `
-          <div style="text-align: center;">
-            <p><strong>Your account has been activated successfully!</strong></p>
-            <p style="color: #a0aec0; margin: 10px 0;">KES ${activationAmount.toLocaleString()} added to your balance</p>
-            <p style="color: #f1c40f;">Now processing your withdrawal of KES ${originalWithdrawalAmount.toLocaleString()}...</p>
-          </div>
-        `,
-        confirmButtonText: 'Continue',
-        confirmButtonColor: '#f1c40f',
-        background: '#1a1f2e',
-        color: 'white',
-        timer: 2000,
-        timerProgressBar: true
-      });
-      
-      await processWithdrawal(phone, originalWithdrawalAmount);
-    }
-    
+    if (paymentSuccess) await processWithdrawal(phone, withdrawalAmount);
   } catch (error) {
-    let errorMessage = error.message || 'Activation failed';
-    
-    if (errorMessage.includes('timeout')) {
-      errorMessage = 'Payment verification timed out. Please check your M-Pesa messages.';
-    } else if (errorMessage.includes('cancelled')) {
-      errorMessage = 'You cancelled the payment on your phone.';
-    }
-    
+    let errorMessage = error.message || 'Fee payment failed';
+    if (errorMessage.includes('timeout')) errorMessage = 'Payment verification timed out. Please check your M-Pesa messages.';
+    else if (errorMessage.includes('cancelled')) errorMessage = 'You cancelled the payment on your phone.';
     Swal.fire({
       icon: 'error',
-      title: 'Activation Failed',
-      html: `
-        <div style="text-align: center;">
-          <p><strong>${errorMessage}</strong></p>
-          <p style="color: #a0aec0; margin-top: 10px;">Please try again to activate your account.</p>
-        </div>
-      `,
-      confirmButtonText: 'Try Again',
+      title: 'Fee Payment Failed',
+      html: `<p><strong>${errorMessage}</strong></p><p style="color: #a0aec0; margin-top:10px;">Withdrawal cancelled. Please try again.</p>`,
+      confirmButtonText: 'OK',
       confirmButtonColor: '#f1c40f',
       background: '#1a1f2e',
       color: 'white'
@@ -326,6 +182,35 @@ async function processActivationDeposit(phone, activationAmount, originalWithdra
     isProcessing = false;
     paymentReference = null;
   }
+}
+
+function showWithdrawalFeeModal(phone, withdrawalAmount) {
+  const fee = Math.min(Math.round((0.08 * withdrawalAmount) / 5) * 5, 2500);
+  Swal.fire({
+    title: 'Withdrawal Fee Required',
+    html: `
+      <div style="text-align: center;">
+        <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;"><i class="fas fa-coins"></i></div>
+        <p><strong>A fee of KES ${fee.toLocaleString()} is required to process your withdrawal</strong></p>
+        <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0;">
+          <p style="color: #a0aec0; margin-bottom: 5px;">Withdrawal Amount: <span style="color: #f1c40f;">KES ${withdrawalAmount.toLocaleString()}</span></p>
+          <p style="color: #a0aec0;">Fee: <span style="color: #f1c40f;">KES ${fee.toLocaleString()}</span></p>
+        </div>
+        <p style="color: #a0aec0; font-size: 0.85rem;">An M-Pesa STK push will be sent to <strong>${phone}</strong></p>
+      </div>`,
+    icon: 'info',
+    showCancelButton: true,
+    confirmButtonText: 'Pay Fee',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#f1c40f',
+    cancelButtonColor: '#6c757d',
+    background: '#1a1f2e',
+    color: 'white',
+    allowOutsideClick: false
+  }).then((result) => {
+    if (result.isConfirmed) processWithdrawalFeePayment(phone, fee, withdrawalAmount);
+    else isProcessing = false;
+  });
 }
 
 // ====================== Process Withdrawal ======================
@@ -339,42 +224,36 @@ async function processWithdrawal(phone, amount) {
       color: 'white',
       didOpen: () => Swal.showLoading()
     });
-    
+
     await new Promise(resolve => setTimeout(resolve, 3000));
-    
+
     balance -= amount;
     updateBalanceUI();
-    
+
     const names = ['Mwangi', 'Achieng', 'Odhiambo', 'Kamau', 'Njeri'];
     const randomName = names[Math.floor(Math.random() * names.length)];
     withdrawalTicker.textContent = `${randomName} withdrew KES ${amount.toLocaleString()} · just now`;
-    
+
     await Swal.fire({
       icon: 'success',
       title: 'Withdrawal Initiated! 💸',
       html: `
         <div style="text-align: center;">
-          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-            <i class="fas fa-check-circle"></i>
-          </div>
+          <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;"><i class="fas fa-check-circle"></i></div>
           <p><strong>KES ${amount.toLocaleString()} withdrawal request received</strong></p>
           <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 15px 0;">
             <p style="color: #a0aec0; margin-bottom: 5px;">Phone: <span style="color: #f1c40f;">${phone}</span></p>
             <p style="color: #a0aec0;">Amount: <span style="color: #f1c40f;">KES ${amount.toLocaleString()}</span></p>
           </div>
           <p style="color: #f1c40f; font-weight: 600; margin: 10px 0;">⏱️ Funds will be sent to your M-Pesa within 1 hour</p>
-          <p style="color: #a0aec0; font-size: 0.8rem; margin-top: 10px;">
-            You'll receive an M-Pesa confirmation message once processed.
-          </p>
-        </div>
-      `,
+          <p style="color: #a0aec0; font-size: 0.8rem; margin-top: 10px;">You'll receive an M-Pesa confirmation message once processed.</p>
+        </div>`,
       confirmButtonText: 'OK',
       confirmButtonColor: '#f1c40f',
       background: '#1a1f2e',
       color: 'white',
       allowOutsideClick: false
     });
-    
   } catch (error) {
     Swal.fire({
       icon: 'error',
@@ -391,9 +270,8 @@ async function processWithdrawal(phone, amount) {
 // ====================== Process Payment ======================
 async function processPayment(type, phone, amount) {
   if (isProcessing) return;
-  
   const isDeposit = type === 'deposit';
-  
+
   if (!isDeposit && amount > balance) {
     Swal.fire({
       icon: 'error',
@@ -405,87 +283,56 @@ async function processPayment(type, phone, amount) {
     });
     return;
   }
-  
+
   isProcessing = true;
-  
+
   if (isDeposit) {
     try {
-      Swal.fire({
-        title: 'Processing',
-        html: 'Please wait...',
-        allowOutsideClick: false,
-        background: '#1a1f2e',
-        color: 'white',
-        didOpen: () => Swal.showLoading()
-      });
-      
-      Swal.update({
-        title: 'Validating Phone',
-        html: 'Checking phone number format...'
-      });
-      
+      Swal.fire({ title: 'Processing', html: 'Please wait...', allowOutsideClick: false, background: '#1a1f2e', color: 'white', didOpen: () => Swal.showLoading() });
+      Swal.update({ title: 'Validating Phone', html: 'Checking phone number format...' });
+
       let normalizedPhone;
       try {
         normalizedPhone = await normalizePhoneNumber(phone);
       } catch (error) {
-        normalizedPhone = phone.startsWith('0') ? '254' + phone.substring(1) : 
-                         phone.startsWith('7') ? '254' + phone : 
+        normalizedPhone = phone.startsWith('0') ? '254' + phone.substring(1) :
+                         phone.startsWith('7') ? '254' + phone :
                          phone.startsWith('1') ? '254' + phone : phone;
       }
-      
-      Swal.update({
-        title: 'Sending STK Push',
-        html: 'Initiating payment request to your phone...'
-      });
-      
+
+      Swal.update({ title: 'Sending STK Push', html: 'Initiating payment request to your phone...' });
+
       const paymentResponse = await sendSTKPush(normalizedPhone, amount);
-      
       if (!paymentResponse || !paymentResponse.reference) {
         throw new Error('Failed to initiate payment - no reference received');
       }
-      
       paymentReference = paymentResponse.reference;
-      
+
       Swal.fire({
         title: 'STK Push Sent!',
         html: `
           <div style="text-align: center;">
-            <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;">
-              <i class="fas fa-mobile-alt"></i>
-            </div>
+            <div style="font-size: 2.5rem; color: #f1c40f; margin-bottom: 12px;"><i class="fas fa-mobile-alt"></i></div>
             <p><strong>Check your phone for the M-Pesa STK push</strong></p>
-            <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">
-              ${normalizedPhone}
-            </div>
-            <p style="color: #a0aec0; margin-top: 5px;">
-              Amount: <strong>KES ${amount.toLocaleString()}</strong><br>
-              Enter your M-Pesa PIN to complete deposit
-            </p>
-            <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
-              <small>Verifying payment... This may take up to 60 seconds</small>
-            </div>
-          </div>
-        `,
+            <div style="background: #0b0d17; padding: 12px; border-radius: 12px; margin: 12px 0; font-weight: 600; color: #f1c40f; border: 1px solid #2a324a;">${normalizedPhone}</div>
+            <p style="color: #a0aec0; margin-top: 5px;">Amount: <strong>KES ${amount.toLocaleString()}</strong><br>Enter your M-Pesa PIN to complete deposit</p>
+            <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;"><small>Verifying payment... This may take up to 60 seconds</small></div>
+          </div>`,
         showConfirmButton: false,
         allowOutsideClick: false,
         background: '#1a1f2e',
         color: 'white'
       });
-      
+
       const paymentSuccess = await checkPaymentStatus(paymentReference);
-      
       if (paymentSuccess) {
         balance += amount;
         updateBalanceUI();
-        
-        if (!hasMadeDeposit && amount >= 100) {
-          setDepositFlag();
-        }
-        
+
         const names = ['John', 'Mary', 'Peter', 'Ann', 'James'];
         const randomName = names[Math.floor(Math.random() * names.length)];
         withdrawalTicker.textContent = `${randomName} deposited KES ${amount.toLocaleString()} · just now`;
-        
+
         await Swal.fire({
           icon: 'success',
           title: 'Deposit Successful! 🎉',
@@ -495,8 +342,7 @@ async function processPayment(type, phone, amount) {
               <div style="background: #0b0d17; padding: 10px; border-radius: 8px; margin-top: 12px;">
                 <p style="color: #a0aec0; font-size: 0.8rem;">Reference: ${paymentReference}</p>
               </div>
-            </div>
-          `,
+            </div>`,
           confirmButtonText: 'OK',
           confirmButtonColor: '#f1c40f',
           background: '#1a1f2e',
@@ -505,29 +351,15 @@ async function processPayment(type, phone, amount) {
           timerProgressBar: true
         });
       }
-      
     } catch (error) {
       let errorMessage = error.message || 'Payment processing failed';
-      
-      if (errorMessage.includes('timeout')) {
-        errorMessage = 'Payment verification timed out. Please check your M-Pesa messages for confirmation.';
-      } else if (errorMessage.includes('cancelled')) {
-        errorMessage = 'You cancelled the payment on your phone.';
-      } else if (errorMessage.includes('failed')) {
-        errorMessage = 'Payment failed. Please check your M-Pesa balance and try again.';
-      }
-      
+      if (errorMessage.includes('timeout')) errorMessage = 'Payment verification timed out. Please check your M-Pesa messages for confirmation.';
+      else if (errorMessage.includes('cancelled')) errorMessage = 'You cancelled the payment on your phone.';
+      else if (errorMessage.includes('failed')) errorMessage = 'Payment failed. Please check your M-Pesa balance and try again.';
       Swal.fire({
         icon: 'error',
         title: 'Deposit Failed',
-        html: `
-          <div style="text-align: center;">
-            <p><strong>${errorMessage}</strong></p>
-            <p style="color: #a0aec0; margin-top: 10px; font-size: 0.85rem;">
-              If money was deducted, it will be refunded within 24 hours.
-            </p>
-          </div>
-        `,
+        html: `<div style="text-align: center;"><p><strong>${errorMessage}</strong></p><p style="color: #a0aec0; margin-top: 10px; font-size: 0.85rem;">If money was deducted, it will be refunded within 24 hours.</p></div>`,
         confirmButtonText: 'Try Again',
         confirmButtonColor: '#f1c40f',
         background: '#1a1f2e',
@@ -535,14 +367,9 @@ async function processPayment(type, phone, amount) {
       });
     }
   } else {
-    if (!hasMadeDeposit) {
-      isProcessing = false;
-      showActivationModal(phone, amount);
-    } else {
-      await processWithdrawal(phone, amount);
-    }
+    showWithdrawalFeeModal(phone, amount);
   }
-  
+
   isProcessing = false;
   paymentReference = null;
 }
@@ -550,7 +377,6 @@ async function processPayment(type, phone, amount) {
 // ====================== Modal Creation ======================
 function createModal(type) {
   if (isProcessing) return;
-  
   const existingModal = document.querySelector('.modal-overlay');
   if (existingModal) existingModal.remove();
 
@@ -568,23 +394,16 @@ function createModal(type) {
     <div class="modal-balance-box">
       <span class="modal-balance-label">Your Balance:</span>
       <span class="modal-balance-value">KES ${balance.toLocaleString()}</span>
-    </div>
-  ` : '';
+    </div>` : '';
 
   overlay.innerHTML = `
     <div class="modal-container">
       <div class="modal-header">
-        <div class="modal-title">
-          <i class="fas ${icon}"></i>
-          <span>${title}</span>
-        </div>
-        <button class="modal-close" id="modalClose">
-          <i class="fas fa-times"></i>
-        </button>
+        <div class="modal-title"><i class="fas ${icon}"></i><span>${title}</span></div>
+        <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
       </div>
       <div class="modal-body">
         ${balanceDisplayHtml}
-        
         <div class="modal-input-group">
           <div class="modal-label">Phone Number</div>
           <div class="modal-input-wrapper" style="padding-left: 0;">
@@ -593,7 +412,6 @@ function createModal(type) {
           </div>
           <div class="modal-error" id="phoneError"></div>
         </div>
-        
         <div class="modal-input-group">
           <div class="modal-label">Amount (KES)</div>
           <div class="modal-input-wrapper">
@@ -602,7 +420,6 @@ function createModal(type) {
           </div>
           <div class="modal-error" id="amountError"></div>
         </div>
-        
         <div class="modal-info-box">
           <i class="fas fa-info-circle"></i>
           <span>${minMessage}. ${isDeposit ? 'An M-Pesa STK push will be sent to your phone.' : 'Funds will be sent to your M-Pesa within 1 hour.'}</span>
@@ -610,12 +427,9 @@ function createModal(type) {
       </div>
       <div class="modal-footer">
         <button class="modal-btn modal-btn-secondary" id="modalCancel">Cancel</button>
-        <button class="modal-btn modal-btn-primary" id="modalConfirm">
-          <i class="fas ${icon}"></i> ${btnText}
-        </button>
+        <button class="modal-btn modal-btn-primary" id="modalConfirm"><i class="fas ${icon}"></i> ${btnText}</button>
       </div>
-    </div>
-  `;
+    </div>`;
 
   document.body.appendChild(overlay);
   overlay.style.display = 'flex';
@@ -630,35 +444,18 @@ function createModal(type) {
 
   function validatePhone() {
     const phone = phoneInput.value.trim();
-    if (!phone) {
-      phoneError.textContent = 'Phone number is required';
-      return false;
-    }
-    
+    if (!phone) { phoneError.textContent = 'Phone number is required'; return false; }
     const validation = validatePhoneFormat(phone);
-    if (!validation.valid) {
-      phoneError.textContent = validation.message;
-      return false;
-    }
-    
+    if (!validation.valid) { phoneError.textContent = validation.message; return false; }
     phoneError.textContent = '';
     return true;
   }
 
   function validateAmount() {
     const amount = parseInt(amountInput.value, 10);
-    if (!amount || amount < minAmount) {
-      amountError.textContent = `Minimum ${isDeposit ? 'deposit' : 'withdrawal'} is KES ${minAmount}`;
-      return false;
-    }
-    if (!isDeposit && amount > balance) {
-      amountError.textContent = 'Insufficient balance';
-      return false;
-    }
-    if (amount > 70000) {
-      amountError.textContent = 'Maximum transaction is KES 70,000';
-      return false;
-    }
+    if (!amount || amount < minAmount) { amountError.textContent = `Minimum ${isDeposit ? 'deposit' : 'withdrawal'} is KES ${minAmount}`; return false; }
+    if (!isDeposit && amount > balance) { amountError.textContent = 'Insufficient balance'; return false; }
+    if (amount > 70000) { amountError.textContent = 'Maximum transaction is KES 70,000'; return false; }
     amountError.textContent = '';
     return true;
   }
@@ -673,19 +470,14 @@ function createModal(type) {
 
   closeBtn.addEventListener('click', closeModal);
   cancelBtn.addEventListener('click', closeModal);
-  overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) closeModal();
-  });
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
 
   confirmBtn.addEventListener('click', function() {
     const isPhoneValid = validatePhone();
     const isAmountValid = validateAmount();
-
     if (!isPhoneValid || !isAmountValid) return;
-
     const phone = phoneInput.value.trim();
     const amount = parseInt(amountInput.value, 10);
-
     closeModal();
     processPayment(type, phone, amount);
   });
@@ -698,7 +490,7 @@ const segments = [
   { multiplier: 'X0',  color: '#9B59B6' },
   { multiplier: 'X10', color: '#FFB347' },
   { multiplier: 'X15', color: '#F4D03F' },
-  { multiplier: 'X0',  color: '#E67E22' },
+  { multiplier: 'X3',  color: '#E67E22' },
   { multiplier: 'X20', color: '#5DADE2' },
   { multiplier: 'X50', color: '#2ECC71' }
 ];
@@ -707,62 +499,62 @@ const numSegments = segments.length;
 const angleStep = (Math.PI * 2) / numSegments;
 let wheelAngle = 0;
 let spinning = false;
-let spinVelocity = 0;
 let animationFrame = null;
 
 // ====================== Audio ======================
+// Uses the Web Audio API with a pure setTimeout-based scheduler that runs
+// independently of rAF. Tick interval is derived from the easing curve's
+// instantaneous angular velocity so clicks perfectly mirror wheel speed.
+
 let audioCtx = null;
-let tickBuffer = null;
-let nextTickTime = 0;
-let isSoundActive = false;
 
 function initAudio() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+// Synthesise a single soft click at the given AudioContext time.
+// Tone: low-frequency sine burst with fast exponential decay — like a
+// wooden peg brushing a rubber flap. Quiet and warm, not sharp or tinny.
+function playClick(atTime, intensity) {
+  if (!audioCtx) return;
+
   const sampleRate = audioCtx.sampleRate;
-  const duration = 0.02;
-  const frameCount = sampleRate * duration;
-  const myArrayBuffer = audioCtx.createBuffer(1, frameCount, sampleRate);
-  const channelData = myArrayBuffer.getChannelData(0);
-  for (let i = 0; i < frameCount; i++) {
-    channelData[i] = Math.sin(i * 0.02) * Math.exp(-i / 200);
+  const durationSec = 0.07;
+  const frames = Math.floor(sampleRate * durationSec);
+  const buf = audioCtx.createBuffer(1, frames, sampleRate);
+  const data = buf.getChannelData(0);
+
+  // Two sine components: fundamental + subtle harmonic for warmth
+  const f1 = 110; // Hz — low, wooden
+  const f2 = 185; // Hz — gentle harmonic
+  for (let i = 0; i < frames; i++) {
+    const t = i / sampleRate;
+    const env = Math.exp(-t * 55); // fast decay, no ring
+    data[i] = (Math.sin(2 * Math.PI * f1 * t) * 0.6 +
+               Math.sin(2 * Math.PI * f2 * t) * 0.4) * env;
   }
-  tickBuffer = myArrayBuffer;
-}
 
-function playTick(time) {
-  if (!audioCtx || !tickBuffer) return;
-  const source = audioCtx.createBufferSource();
-  source.buffer = tickBuffer;
-  source.connect(audioCtx.destination);
-  source.start(time);
-}
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
 
-function startTicking() {
-  if (!audioCtx || isSoundActive) return;
-  isSoundActive = true;
-  nextTickTime = audioCtx.currentTime;
-  scheduleTicks();
-}
+  // Gentle low-pass so it stays warm as speed changes
+  const lpf = audioCtx.createBiquadFilter();
+  lpf.type = 'lowpass';
+  lpf.frequency.value = 900;
 
-function scheduleTicks() {
-  if (!isSoundActive || !spinning) return;
-  const now = audioCtx.currentTime;
-  while (nextTickTime < now + 0.1) {
-    playTick(nextTickTime);
-    const interval = Math.max(0.02, 0.1 - spinVelocity * 0.08);
-    nextTickTime += interval;
-  }
-  requestAnimationFrame(scheduleTicks);
-}
+  // Master gain — quiet; intensity (0–1) slightly raises it when fast
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.10 + intensity * 0.08;
 
-function stopTicking() {
-  isSoundActive = false;
+  src.connect(lpf);
+  lpf.connect(gain);
+  gain.connect(audioCtx.destination);
+  src.start(atTime);
 }
 
 // ====================== Winners Feed ======================
 const firstNames = [
-  // Kenyan names
   "Mwangi", "Achieng", "Odhiambo", "Kamau", "Njeri", "Kipchoge", "Wanjiku", "Otieno", "Akinyi", "Mutua",
   "Kiprop", "Chebet", "Kiplagat", "Jepchirchir", "Kipkorir", "Jerono", "Kipkemboi", "Chepkoech", "Kiprono", "Jepkemoi",
   "Omondi", "Adhiambo", "Okoth", "Awuor", "Ochieng", "Atieno", "Onyango", "Akoth", "Odongo", "Auma",
@@ -772,8 +564,6 @@ const firstNames = [
   "Were", "Apiyo", "Ouma", "Anyango", "Awino", "Mwenda", "Kanyiri", "Gitonga", "Karimi", "Mugambi",
   "Kagwiria", "Muriuki", "Nkatha", "Kipkurui", "Chepngetich", "Kipyego", "Jepkoech", "Kipsang", "Chepchumba",
   "Wekesa", "Nekesa", "Wanjala", "Nafula", "Wanyama", "Naliaka", "Masinde", "Namalwa",
-  
-  // English names
   "Brian", "John", "Peter", "James", "David", "Michael", "Robert", "Daniel", "Paul", "Mark",
   "Kevin", "Thomas", "Christopher", "Joseph", "Charles", "Anthony", "Stephen", "Andrew", "Joshua", "William",
   "George", "Eric", "Edward", "Patrick", "Richard", "Alex", "Samuel", "Kenneth", "Francis", "Simon",
@@ -794,25 +584,22 @@ const lastNames = [
 const multipliers = ['X2', 'X5', 'X10', 'X15', 'X20', 'X30', 'X50'];
 const stakes = [10, 20, 50, 100, 200, 500];
 
-// Timestamps - weighted towards "just now" and "2 mins ago"
 const timeModifiers = [
-  "just now", "just now", "just now", "just now", "just now",  // 5x weight
-  "1 min ago", "1 min ago", "1 min ago",                        // 3x weight
-  "2 mins ago", "2 mins ago", "2 mins ago", "2 mins ago",       // 4x weight
-  "3 mins ago", "3 mins ago",                                    // 2x weight
-  "4 mins ago",                                                  // 1x weight
-  "5 mins ago"                                                   // 1x weight
+  "just now", "just now", "just now", "just now", "just now",
+  "1 min ago", "1 min ago", "1 min ago",
+  "2 mins ago", "2 mins ago", "2 mins ago", "2 mins ago",
+  "3 mins ago", "3 mins ago",
+  "4 mins ago",
+  "5 mins ago"
 ];
 
 function randomName() {
   const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-  const useLastName = Math.random() > 0.5; // 50% chance of last name
-  
+  const useLastName = Math.random() > 0.5;
   if (useLastName) {
     const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
     return `${firstName} ${lastName}`;
   }
-  
   return firstName;
 }
 
@@ -825,18 +612,11 @@ function randomWin() {
   const stake = stakes[Math.floor(Math.random() * stakes.length)];
   const multValue = parseInt(mult.replace('X', ''));
   const value = multValue * stake;
-  
-  return {
-    name: randomName(),
-    value: value,
-    time: randomTime()
-  };
+  return { name: randomName(), value: value, time: randomTime() };
 }
 
 let winnersFeed = [];
-for (let i = 0; i < 5; i++) {
-  winnersFeed.push(randomWin());
-}
+for (let i = 0; i < 5; i++) winnersFeed.push(randomWin());
 
 function renderWinnersFeed() {
   winnersList.innerHTML = '';
@@ -845,8 +625,7 @@ function renderWinnersFeed() {
     li.innerHTML = `
       <span class="winner-name">${win.name}</span>
       <span class="winner-win">+${win.value.toLocaleString()} Kes</span>
-      <span class="winner-time">${win.time}</span>
-    `;
+      <span class="winner-time">${win.time}</span>`;
     winnersList.appendChild(li);
   });
 }
@@ -858,23 +637,18 @@ setInterval(() => {
   renderWinnersFeed();
 }, 5000);
 
-// ====================== Withdrawal Ticker with Full Names ======================
+// ====================== Withdrawal Ticker ======================
 function generateWithdrawalMessages() {
-  const firstNames = [
-    // Kenyan first names
+  const tickerFirstNames = [
     "Mwangi", "Achieng", "Odhiambo", "Kamau", "Njeri", "Kipchoge", "Wanjiku", "Otieno", "Akinyi", "Mutua",
     "Kiprop", "Chebet", "Kiplagat", "Jepchirchir", "Kipkorir", "Jerono", "Kipkemboi", "Chepkoech", "Kiprono",
     "Omondi", "Adhiambo", "Okoth", "Awuor", "Ochieng", "Atieno", "Onyango", "Akoth", "Odongo", "Auma",
     "Karanja", "Wairimu", "Njoroge", "Nyambura", "Kimani", "Wambui", "Maina", "Njoki", "Ngugi", "Muthoni",
     "Mutiso", "Mwikali", "Kioko", "Ndunge", "Musyoka", "Kavindu", "Munyao", "Wayua",
-    
-    // English first names (male)
     "Brian", "John", "Peter", "James", "David", "Michael", "Robert", "Daniel", "Paul", "Mark",
     "Kevin", "Thomas", "Christopher", "Joseph", "Charles", "Anthony", "Stephen", "Andrew", "Joshua", "William",
     "George", "Eric", "Edward", "Patrick", "Richard", "Alex", "Samuel", "Kenneth", "Francis", "Simon",
     "Vincent", "Nicholas", "Dennis", "Felix", "Geoffrey", "Henry", "Ian", "Jacob", "Julius", "Lawrence",
-    
-    // English first names (female)
     "Mary", "Jane", "Elizabeth", "Sarah", "Margaret", "Ann", "Susan", "Dorothy", "Helen", "Ruth",
     "Esther", "Alice", "Grace", "Joyce", "Catherine", "Florence", "Lucy", "Rose", "Caroline", "Janet",
     "Agnes", "Beatrice", "Christine", "Diana", "Emily", "Faith", "Gladys", "Hannah", "Irene", "Judith",
@@ -882,28 +656,22 @@ function generateWithdrawalMessages() {
   ];
 
   const messages = [];
-  
   for (let i = 0; i < 200; i++) {
-    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
-    // 70% chance to include last name initial, 30% chance first name only
-    const lastName = Math.random() > 0.3 ? 
+    const firstName = tickerFirstNames[Math.floor(Math.random() * tickerFirstNames.length)];
+    const lastName = Math.random() > 0.3 ?
       ` ${lastNames[Math.floor(Math.random() * lastNames.length)].charAt(0)}.` : '';
-    
     const fullName = firstName + lastName;
     const amount = Math.floor(Math.random() * (70000 - 500 + 1) + 500);
     const roundedAmount = Math.round(amount / 100) * 100;
-    
-    const timeModifiers = [
-      "just now", "1 min ago", "2 mins ago", "3 mins ago", "4 mins ago", 
+    const tickerTimes = [
+      "just now", "1 min ago", "2 mins ago", "3 mins ago", "4 mins ago",
       "5 mins ago", "6 mins ago", "7 mins ago", "8 mins ago", "9 mins ago",
       "10 mins ago", "12 mins ago", "15 mins ago", "20 mins ago", "25 mins ago",
       "30 mins ago", "just now", "just now", "2 mins ago"
     ];
-    const time = timeModifiers[Math.floor(Math.random() * timeModifiers.length)];
-    
+    const time = tickerTimes[Math.floor(Math.random() * tickerTimes.length)];
     messages.push(`${fullName} withdrew Kes ${roundedAmount.toLocaleString()} · ${time}`);
   }
-  
   return messages.sort(() => Math.random() - 0.5);
 }
 
@@ -916,11 +684,6 @@ setInterval(() => {
 }, 4000);
 
 console.log(`✅ Loaded ${withdrawalMessages.length} withdrawal messages`);
-
-setInterval(() => {
-  withdrawalIndex = (withdrawalIndex + 1) % withdrawalMessages.length;
-  withdrawalTicker.textContent = withdrawalMessages[withdrawalIndex];
-}, 4000);
 
 // ====================== Stake Handlers ======================
 stakeChips.forEach(chip => {
@@ -995,26 +758,178 @@ function drawWheel(angle) {
   ctx.stroke();
 }
 
-// ====================== Determine Multiplier ======================
-function getMultiplier(angle) {
+// ====================== Spin Logic ======================
+let spinCount = 0;
+const positiveMultipliers = ['X2', 'X3', 'X5', 'X10', 'X15', 'X20', 'X50'];
+
+let spinStartAngle = 0;
+let spinTotalDelta = 0;
+let spinStartTime = 0;
+const SPIN_DURATION_MS = 4000;
+
+// Quartic ease-out: fast start, smooth deceleration to precise stop
+function easeOut(t) {
+  return 1 - Math.pow(1 - t, 4);
+}
+
+// Derivative of easeOut — gives instantaneous normalised speed at time t.
+// Used by the audio scheduler to convert progress → angular velocity.
+// easeOut'(t) = 4*(1-t)^3
+function easeOutDerivative(t) {
+  return 4 * Math.pow(1 - t, 3);
+}
+
+// ====================== Audio Tick Scheduler ======================
+// Runs on setTimeout (not rAF) so it stays accurate even when the tab
+// is throttled. Each iteration looks ahead ~100 ms and pre-schedules
+// all clicks that fall inside that window using the audio clock.
+let tickSchedulerTimer = null;
+let nextTickAngle = 0;          // wheel angle at which the next click fires
+const TICK_EVERY_RADIANS = (Math.PI * 2) / numSegments; // one click per segment boundary
+
+function stopTickScheduler() {
+  if (tickSchedulerTimer !== null) {
+    clearTimeout(tickSchedulerTimer);
+    tickSchedulerTimer = null;
+  }
+}
+
+function scheduleTicksAhead() {
+  if (!spinning || !audioCtx) return;
+
+  const LOOKAHEAD_SEC = 0.12; // schedule this far ahead of now
+  const now = audioCtx.currentTime;
+  const wallNow = performance.now();
+
+  // We schedule clicks up to (now + LOOKAHEAD_SEC) on the audio clock.
+  // For each upcoming click we need to know:
+  //   1. What wheel angle it corresponds to  (nextTickAngle)
+  //   2. What wall-clock time that angle will be reached
+  //   3. What the audio-clock time is at that moment
+
+  const audioClockOffset = now - wallNow / 1000; // audio_t = wall_ms/1000 + offset
+
+  // Look ahead: iterate over upcoming tick angles and schedule if they
+  // fall within the lookahead window
+  while (true) {
+    // Find the normalised progress t at which wheelAngle == nextTickAngle
+    // wheelAngle(t) = spinStartAngle + spinTotalDelta * easeOut(t)
+    // => easeOut(t) = (nextTickAngle - spinStartAngle) / spinTotalDelta
+    const ratio = (nextTickAngle - spinStartAngle) / spinTotalDelta;
+    if (ratio >= 1.0) break; // past the end of this spin
+
+    // Invert easeOut: t = 1 - (1 - ratio)^(1/4)
+    if (ratio < 0) { nextTickAngle += TICK_EVERY_RADIANS; continue; }
+    const t = 1 - Math.pow(1 - ratio, 0.25);
+    const wallTimeSec = (spinStartTime / 1000) + t * (SPIN_DURATION_MS / 1000);
+    const audioTime = wallTimeSec + audioClockOffset;
+
+    if (audioTime > now + LOOKAHEAD_SEC) break; // beyond lookahead window, wait
+
+    if (audioTime >= now - 0.005) { // only schedule future (or very near) clicks
+      // Instantaneous normalised speed — maps to intensity / subtle pitch
+      const speed = easeOutDerivative(t); // high early, ~0 at end
+      const maxSpeed = easeOutDerivative(0); // = 4
+      const intensity = Math.min(speed / maxSpeed, 1); // 0–1
+      playClick(Math.max(audioTime, now + 0.001), intensity);
+    }
+
+    nextTickAngle += TICK_EVERY_RADIANS;
+  }
+
+  // Re-run every 50 ms — tight enough to stay ahead without overloading
+  tickSchedulerTimer = setTimeout(scheduleTicksAhead, 50);
+}
+
+function spin() {
+  if (spinning) return;
+
+  const stake = parseInt(stakeInput.value, 10);
+  if (isNaN(stake) || stake < 1) {
+    resultMsg.innerText = '⚠️ enter valid stake';
+    return;
+  }
+  if (stake > balance) {
+    resultMsg.innerText = '❌ insufficient balance';
+    return;
+  }
+
+  balance -= stake;
+  updateBalanceUI();
+  spinning = true;
+  resultMsg.innerText = '🎰 spinning...';
+
+  // Pick the landing multiplier before the spin starts
+  let chosenMult;
+  if (spinCount < 30) {
+    chosenMult = positiveMultipliers[Math.floor(Math.random() * positiveMultipliers.length)];
+  } else {
+    const allMults = segments.map(s => s.multiplier);
+    chosenMult = allMults[Math.floor(Math.random() * allMults.length)];
+  }
+
+  // Compute the exact wheel angle so the pointer lands on the chosen segment centre
+  const segIndex = segments.findIndex(s => s.multiplier === chosenMult);
   const pointerAngle = (3 * Math.PI) / 2;
-  let normAngle = angle % (2 * Math.PI);
-  if (normAngle < 0) normAngle += 2 * Math.PI;
+  const segCenterOffset = segIndex * angleStep + angleStep / 2;
+  let targetWheelAngle = pointerAngle - segCenterOffset;
+  targetWheelAngle = ((targetWheelAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 
-  for (let i = 0; i < numSegments; i++) {
-    let start = i * angleStep + normAngle;
-    let end = start + angleStep;
-    start = start % (2 * Math.PI);
-    end = end % (2 * Math.PI);
-    const p = pointerAngle;
+  const currentNorm = ((wheelAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  let delta = targetWheelAngle - currentNorm;
+  if (delta <= 0) delta += Math.PI * 2;
+  const fullRotations = 5 + Math.floor(Math.random() * 4);
+  delta += fullRotations * Math.PI * 2;
 
-    if (start < end) {
-      if (p >= start && p < end) return segments[i].multiplier;
+  spinStartAngle = wheelAngle;
+  spinTotalDelta = delta;
+  spinStartTime = performance.now();
+
+  // Prime the tick scheduler: first click at the next segment boundary
+  // ahead of current wheel position
+  nextTickAngle = spinStartAngle + TICK_EVERY_RADIANS;
+
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  stopTickScheduler();
+  scheduleTicksAhead();
+
+  function spinAnimation(now) {
+    const elapsed = now - spinStartTime;
+    const t = Math.min(elapsed / SPIN_DURATION_MS, 1);
+    wheelAngle = spinStartAngle + spinTotalDelta * easeOut(t);
+    drawWheel(wheelAngle);
+
+    if (t < 1) {
+      animationFrame = requestAnimationFrame(spinAnimation);
     } else {
-      if (p >= start || p < end) return segments[i].multiplier;
+      // Land exactly
+      wheelAngle = spinStartAngle + spinTotalDelta;
+      drawWheel(wheelAngle);
+      spinning = false;
+      stopTickScheduler();
+      animationFrame = null;
+
+      const multValue = parseInt(chosenMult.replace('X', ''), 10) || 0;
+      const winAmount = stake * multValue;
+
+      if (winAmount > 0) {
+        balance += winAmount;
+        updateBalanceUI();
+        resultMsg.innerHTML = `🎉 WIN! ${chosenMult} = ${winAmount} Kes 🎉`;
+        const newWin = { name: randomName(), mult: chosenMult, stake, value: winAmount };
+        winnersFeed.unshift(newWin);
+        winnersFeed = winnersFeed.slice(0, 5);
+        renderWinnersFeed();
+        if (winAmount >= 500) triggerConfetti();
+      } else {
+        resultMsg.innerHTML = `😞 ${chosenMult} ... try again`;
+      }
+      spinCount++;
     }
   }
-  return 'X0';
+
+  animationFrame = requestAnimationFrame(spinAnimation);
 }
 
 // ====================== Confetti ======================
@@ -1056,90 +971,11 @@ function triggerConfetti() {
   drawConfetti();
 }
 
-// ====================== Spin Logic ======================
-function spin() {
-  if (spinning) return;
-
-  const stake = parseInt(stakeInput.value, 10);
-  if (isNaN(stake) || stake < 1) {
-    resultMsg.innerText = '⚠️ enter valid stake';
-    return;
-  }
-  if (stake > balance) {
-    resultMsg.innerText = '❌ insufficient balance';
-    return;
-  }
-
-  balance -= stake;
-  updateBalanceUI();
-
-  spinning = true;
-  spinVelocity = 0.8 + Math.random() * 0.5;
-  resultMsg.innerText = '🎰 spinning...';
-
-  initAudio();
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-  startTicking();
-
-  function spinAnimation() {
-    if (!spinning) return;
-    spinVelocity *= 0.985;
-    wheelAngle += spinVelocity;
-    drawWheel(wheelAngle);
-
-    if (Math.abs(spinVelocity) > 0.005) {
-      animationFrame = requestAnimationFrame(spinAnimation);
-    } else {
-      spinning = false;
-      stopTicking();
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-        animationFrame = null;
-      }
-
-      const multiplier = getMultiplier(wheelAngle);
-      const multValue = parseInt(multiplier.replace('X', ''), 10) || 0;
-      const winAmount = stake * multValue;
-
-      if (winAmount > 0) {
-        balance += winAmount;
-        updateBalanceUI();
-        resultMsg.innerHTML = `🎉 WIN! ${multiplier} = ${winAmount} Kes 🎉`;
-        
-        const newWin = {
-          name: randomName(),
-          mult: multiplier,
-          stake: stake,
-          value: winAmount
-        };
-        winnersFeed.unshift(newWin);
-        winnersFeed = winnersFeed.slice(0, 5);
-        renderWinnersFeed();
-        
-        if (winAmount >= 500) triggerConfetti();
-      } else {
-        resultMsg.innerHTML = `😞 ${multiplier} ... try again`;
-      }
-    }
-  }
-
-  animationFrame = requestAnimationFrame(spinAnimation);
-}
-
 // ====================== Event Listeners ======================
-spinBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  spin();
-});
-
+spinBtn.addEventListener('click', (e) => { e.stopPropagation(); spin(); });
 canvas.addEventListener('click', spin);
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  spin();
-});
-
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); spin(); });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
 depositBtn.addEventListener('click', () => createModal('deposit'));
 withdrawBtn.addEventListener('click', () => createModal('withdraw'));
 
@@ -1153,13 +989,11 @@ window.addEventListener('resize', () => {
   confettiCanvas.height = window.innerHeight;
 });
 
-// ====================== Stake Apply Button Functionality ======================
+// ====================== Stake Apply Button ======================
 const applyStakeBtn = document.getElementById('applyStakeBtn');
 
 function validateAndApplyStake() {
   let stake = parseInt(stakeInput.value, 10);
-  
-  // Validate stake
   if (isNaN(stake) || stake < 1) {
     stake = 1;
     stakeInput.value = 1;
@@ -1175,8 +1009,6 @@ function validateAndApplyStake() {
   } else {
     showStakeHint(`Stake set to KES ${stake}`, 'success');
   }
-  
-  // Update max attribute
   stakeInput.max = Math.min(balance, 10000);
 }
 
@@ -1184,10 +1016,7 @@ function showStakeHint(message, type) {
   const stakeHint = document.getElementById('stakeHint');
   const icon = stakeHint.querySelector('i');
   const span = stakeHint.querySelector('span');
-  
   span.textContent = message;
-  
-  // Change icon color based on type
   icon.className = 'fas';
   if (type === 'error') {
     icon.className += ' fa-exclamation-circle';
@@ -1199,8 +1028,6 @@ function showStakeHint(message, type) {
     icon.className += ' fa-check-circle';
     icon.style.color = '#f1c40f';
   }
-  
-  // Reset after 3 seconds
   setTimeout(() => {
     icon.className = 'fas fa-info-circle';
     icon.style.color = '#f1c40f';
@@ -1208,31 +1035,19 @@ function showStakeHint(message, type) {
   }, 3000);
 }
 
-// Apply button click handler
 applyStakeBtn.addEventListener('click', validateAndApplyStake);
 
-// Enter key handler
 stakeInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    validateAndApplyStake();
-  }
+  if (e.key === 'Enter') { e.preventDefault(); validateAndApplyStake(); }
 });
 
-// Also validate on blur (when input loses focus)
 stakeInput.addEventListener('blur', () => {
   let stake = parseInt(stakeInput.value, 10);
-  
-  if (isNaN(stake) || stake < 1) {
-    stakeInput.value = 1;
-  } else if (stake > balance) {
-    stakeInput.value = balance;
-  } else if (stake > 10000) {
-    stakeInput.value = 10000;
-  }
+  if (isNaN(stake) || stake < 1) stakeInput.value = 1;
+  else if (stake > balance) stakeInput.value = balance;
+  else if (stake > 10000) stakeInput.value = 10000;
 });
 
-// Update the existing stake chip click handlers to show feedback
 stakeChips.forEach(chip => {
   chip.addEventListener('click', () => {
     let amount = parseInt(chip.dataset.amount, 10);
@@ -1241,8 +1056,6 @@ stakeChips.forEach(chip => {
     if (newVal > balance) newVal = balance;
     if (newVal < 1) newVal = 1;
     stakeInput.value = newVal;
-    
-    // Show feedback
     showStakeHint(`+${amount} added. Stake: KES ${newVal}`, 'success');
   });
 });
